@@ -1,38 +1,47 @@
 # ProjectMonitoring Architecture
 
-Symfony 8 / PHP 8.4 monitoring console for Loop 9 and future games.
+One repo, two apps. The backend is a Symfony 8 / PHP 8.4 JSON API. The frontend is a React + TypeScript SPA with Redux Toolkit Query.
 
-SRWA-style hexagonal / DDD-lite layout, matching the Loop 9 backend:
+SRWA-style hexagonal / DDD-lite layout on both sides, matching the Loop 9 backend:
+
+## Backend
 
 | Layer | Path | Responsibility |
 |---|---|---|
-| Model | `src/Model` | Projects, snapshots, metric samples, outbound ports |
-| Application | `src/Application` | Use cases and dashboard DTOs |
-| Adapter | `src/Adapter` | HTTP, Twig, JSON file store, health probe, admin/ingest auth |
+| Model | `backend/src/Model` | Projects, snapshots, metric samples, outbound ports |
+| Application | `backend/src/Application` | Use cases and dashboard DTOs |
+| Adapter | `backend/src/Adapter` | HTTP JSON, JSON file store, health probe, admin/ingest auth |
 
-Dependencies point inward. HTTP adapters call application services. Application depends only on Model types and ports. The JSON store and HttpClient implement those ports through aliases in `config/services.yaml`.
+Dependencies point inward. HTTP adapters call application services. Application depends only on Model types and ports. The JSON store and HttpClient implement those ports through aliases in `backend/config/services.yaml`.
+
+## Frontend
+
+| Layer | Path | Responsibility |
+|---|---|---|
+| Model | `frontend/src/model` | API-facing types and status helpers |
+| Adapter / API | `frontend/src/adapter/api` | RTK Query, `X-Admin-Token` |
+| Adapter / store | `frontend/src/adapter/store` | Auth token in sessionStorage |
+| Adapter / UI | `frontend/src/adapter/ui` | Login, fleet board, project detail |
+
+Pages never call `fetch`. A new screen adds a typed endpoint, then a page that selects from the cache.
 
 ## Request pipelines
 
 ```mermaid
 flowchart TB
-  subgraph public [Public]
-    H["GET /healthz"]
-    R["GET /readyz"]
-    L["GET POST /login"]
-  end
-  subgraph ui [Admin session]
-    D["GET /"]
-    P["GET /projects/gameId"]
-    F["POST /refresh"]
+  subgraph spa [React SPA]
+    Login["POST /api/v1/auth/login"]
+    Board["GET /api/v1/overview"]
+    Detail["GET /api/v1/projects/gameId"]
+    Poll["POST /api/v1/poll"]
   end
   subgraph api [Token APIs]
     I["POST /api/v1/projects/gameId/metrics"]
     O["POST /api/v1/projects/gameId/poll"]
   end
-  D --> Overview[GetMonitoringOverview]
+  Board --> Overview[GetMonitoringOverview]
   I --> Ingest[IngestMetricBatch]
-  F --> Snapshot[RecordHealthSnapshot]
+  Poll --> Snapshot[RecordHealthSnapshot]
   Snapshot --> Probe[HttpHealthProbe]
   Overview --> Store[(JSON store)]
   Ingest --> Store
@@ -43,16 +52,16 @@ flowchart TB
 - Register games as `Project` rows (`loop9` is seeded from env)
 - Poll `/healthz` and `/readyz` on demand or via `bin/console app:poll-health`
 - Accept metric batches from game backends (`X-Ingest-Token`)
-- Show a single-screen fleet dashboard plus a project detail page
+- Show a fleet board plus a project detail page
 
 Management controls (kill-switch, provider routing, Unreal remote) are out of scope.
 
 ## Auth
 
-- Admin web: shared `ADMIN_TOKEN` stored in a session cookie after `/login`
-- Admin API: `X-Admin-Token`
+- SPA: `ADMIN_TOKEN` posted to `/api/v1/auth/login`, then sent as `X-Admin-Token`
 - Ingest API: per-project `X-Ingest-Token` compared to a SHA-256 hash
+- CORS allows `localhost` / `127.0.0.1`. Vite proxies `/api` in development.
 
 ## Persistence
 
-JSON document store at `DATABASE_PATH` (default `var/data/monitoring.json`). Created on first boot. No Doctrine. Repository ports stay stable if a later adapter swaps in Postgres.
+JSON document store at `DATABASE_PATH` (default `backend/var/data/monitoring.json`). Created on first boot. No Doctrine. Repository ports stay stable if a later adapter swaps in Postgres.

@@ -1,18 +1,9 @@
-
-###> symfony/framework-bundle ###
-/.env.local
-/.env.local.php
-/.env.*.local
-/config/secrets/prod/prod.decrypt.private.php
-/public/bundles/
-/var/
-/vendor/
-###< symfony/framework-bundle ###
-
-###> phpunit/phpunit ###
-/phpunit.xml
-/.phpunit.cache/
-###< phpunit/phpunit ###
-
-/var/data/*.json
-/var/data/*.json.tmp
+/backend/vendor/
+/backend/var/
+/backend/.env.local
+/backend/.env.local.php
+/backend/.env.*.local
+/frontend/node_modules/
+/frontend/dist/
+.phpunit.cache/
+.DS_Store

@@ -1,0 +1,65 @@
+export type HealthStatus = 'ok' | 'ready' | 'not_ready' | 'down' | 'error' | 'unseen'
+
+export type ProbeSnapshot = {
+  status: HealthStatus | null
+  http_code: number | null
+  latency_ms: number | null
+  checked_at: string | null
+}
+
+export type ProjectCard = {
+  game_id: string
+  display_name: string
+  health_url: string
+  ready_url: string
+  health: ProbeSnapshot
+  ready: ProbeSnapshot
+  metrics: {
+    count_24h: number
+    totals_24h: Record<string, number>
+  }
+}
+
+export type HealthHistoryRow = {
+  endpoint: 'health' | 'ready'
+  status: HealthStatus
+  http_code: number
+  latency_ms: number
+  checked_at: string
+  error: string | null
+}
+
+export type MetricRow = {
+  name: string
+  value: number
+  tags: Record<string, string>
+  recorded_at: string
+}
+
+export type ProjectDetail = {
+  project: ProjectCard
+  health_history: HealthHistoryRow[]
+  recent_metrics: MetricRow[]
+}
+
+export type OverviewResponse = {
+  projects: ProjectCard[]
+}
+
+export function displayStatus(status: string | null | undefined): HealthStatus {
+  if (
+    status === 'ok' ||
+    status === 'ready' ||
+    status === 'not_ready' ||
+    status === 'down' ||
+    status === 'error'
+  ) {
+    return status
+  }
+
+  return 'unseen'
+}
+
+export function isHealthy(status: string | null | undefined): boolean {
+  return status === 'ok' || status === 'ready'
+}
