@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Adapter\Http;
 
-use App\Adapter\Persistence\JsonFileDatabase;
+use App\Adapter\Persistence\Postgres\PostgresConnection;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Attribute\Route;
@@ -12,7 +12,7 @@ use Symfony\Component\Routing\Attribute\Route;
 final class ReadyController
 {
     public function __construct(
-        private readonly JsonFileDatabase $database,
+        private readonly PostgresConnection $connection,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -21,9 +21,9 @@ final class ReadyController
     public function __invoke(): JsonResponse
     {
         try {
-            $this->database->pingWrite();
+            $this->connection->pdo()->query('SELECT 1');
         } catch (\Throwable $exception) {
-            $this->logger->error('Readiness store probe failed.', [
+            $this->logger->error('Readiness database probe failed.', [
                 'exceptionClass' => $exception::class,
             ]);
 

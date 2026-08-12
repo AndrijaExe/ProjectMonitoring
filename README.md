@@ -3,13 +3,19 @@
 Monitoring-first admin console for Loop 9, with a project registry so the next game can plug in without a rewrite.
 
 ```
-backend/   Symfony 8 JSON API
+backend/   Symfony 8 JSON API on Postgres
 frontend/  React + TypeScript + Redux Toolkit
 ```
 
 Architecture: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Local run
+
+Start Postgres first (runs on port 5433 so it will not fight a local install):
+
+```bash
+docker compose up -d db
+```
 
 Terminal 1 — API:
 
@@ -18,6 +24,7 @@ cd backend
 cp .env.dist .env.local   # if you do not already have one
 # set ADMIN_TOKEN to a private 16+ character value
 composer install
+php bin/console app:db-setup   # creates tables, seeds the catalog, safe to re-run
 php -S 127.0.0.1:8081 -t public
 ```
 
@@ -54,11 +61,16 @@ php bin/console app:poll-health --project=loop9
 
 ## Tests
 
+The backend suite talks to the real database, so bring it up first:
+
 ```bash
+docker compose up -d db
 cd backend && composer test
 cd frontend && npm run build
 ```
 
+Tests use the separate `monitoring_test` database and truncate between cases, so they never touch your dev data.
+
 ## Add another game later
 
-Extend `ProjectCatalogSeeder` (or write a new project into `backend/var/data/monitoring.json`) with `game_id`, health/ready URLs, and an ingest token hash. The dashboard and ingest API are already keyed by `game_id`.
+Extend `ProjectCatalogSeeder` (or insert a row into `projects`) with `game_id`, health/ready URLs, and an ingest token hash. The dashboard and ingest API are already keyed by `game_id`.

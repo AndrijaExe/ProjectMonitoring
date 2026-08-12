@@ -4,10 +4,16 @@ declare(strict_types=1);
 
 namespace App\Tests\Integration;
 
+use App\Tests\Support\TestDatabase;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
 final class PlatformEndpointsTest extends WebTestCase
 {
+    protected function setUp(): void
+    {
+        TestDatabase::reset();
+    }
+
     public function testHealthzIsLive(): void
     {
         $client = static::createClient();

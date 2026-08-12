@@ -7,11 +7,13 @@ namespace App\Adapter\Persistence;
 use App\Model\GameId;
 use App\Model\IngestToken;
 use App\Model\Project;
+use App\Model\ProjectRepository;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 final class ProjectCatalogSeeder
 {
     public function __construct(
+        private readonly ProjectRepository $projects,
         #[Autowire('%env(LOOP9_DISPLAY_NAME)%')]
         private readonly string $loop9DisplayName,
         #[Autowire('%env(LOOP9_HEALTH_URL)%')]
@@ -23,19 +25,17 @@ final class ProjectCatalogSeeder
     ) {
     }
 
-    public function seed(JsonFileDatabase $database): void
+    public function seed(): void
     {
-        $repository = new JsonProjectRepository($database);
-        $existing = $repository->findByGameId(GameId::fromString('loop9'));
-        $token = $this->loop9IngestToken !== '' ? $this->loop9IngestToken : 'dev-loop9-ingest-token';
-        $hash = $existing?->ingestTokenHash ?? IngestToken::hash($token);
+        $gameId = GameId::fromString('loop9');
+        $existing = $this->projects->findByGameId($gameId);
 
-        if ($this->loop9IngestToken !== '') {
-            $hash = IngestToken::hash($this->loop9IngestToken);
-        }
+        $hash = $this->loop9IngestToken !== ''
+            ? IngestToken::hash($this->loop9IngestToken)
+            : $existing?->ingestTokenHash ?? IngestToken::hash('dev-loop9-ingest-token');
 
-        $repository->save(new Project(
-            GameId::fromString('loop9'),
+        $this->projects->save(new Project(
+            $gameId,
             $this->loop9DisplayName !== '' ? $this->loop9DisplayName : 'Loop 9',
             $this->loop9HealthUrl,
             $this->loop9ReadyUrl,

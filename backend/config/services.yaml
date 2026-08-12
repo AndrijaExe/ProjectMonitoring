@@ -10,15 +10,15 @@ services:
         resource: '../src/'
 
     App\Model\ProjectRepository:
-        alias: App\Adapter\Persistence\JsonProjectRepository
+        alias: App\Adapter\Persistence\Postgres\PdoProjectRepository
         public: false
 
     App\Model\HealthSnapshotStore:
-        alias: App\Adapter\Persistence\JsonHealthSnapshotStore
+        alias: App\Adapter\Persistence\Postgres\PdoHealthSnapshotStore
         public: false
 
     App\Model\MetricStore:
-        alias: App\Adapter\Persistence\JsonMetricStore
+        alias: App\Adapter\Persistence\Postgres\PdoMetricStore
         public: false
 
     App\Model\HealthProbe:

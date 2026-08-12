@@ -77,4 +77,14 @@ Free hosting tiers drop the request that wakes them, so a timeout is retried onc
 
 ## Persistence
 
-JSON document store at `DATABASE_PATH` (default `backend/var/data/monitoring.json`). Created on first boot. No Doctrine. Repository ports stay stable if a later adapter swaps in Postgres.
+Postgres over plain PDO, no ORM. `DATABASE_URL` points at it; `docker-compose.yml` runs one locally on port 5433.
+
+| Table | Holds |
+|---|---|
+| `projects` | Registry, keyed by `game_id`, with the ingest token hash |
+| `health_snapshots` | Every probe result, indexed on `(game_id, endpoint, checked_at DESC)` |
+| `metric_samples` | Ingested samples with `JSONB` tags, indexed on `(game_id, recorded_at DESC)` |
+
+`php bin/console app:db-setup` creates missing tables and seeds the catalog. It is idempotent, so it is safe on every deploy.
+
+This replaced a JSON file store, which read the whole document and wrote it back without locking. That was fine while polling was manual, but a cron poll writing while a game ingests metrics loses one of the two updates with no error. Aggregation (`totals_24h`) now runs as `SUM ... GROUP BY` in the database instead of a PHP loop over every row ever written.
