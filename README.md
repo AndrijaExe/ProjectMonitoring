@@ -33,6 +33,8 @@ Open `http://127.0.0.1:5173`, sign in with `ADMIN_TOKEN`, then **Poll all now**.
 
 Loop 9 is seeded against `https://loop9-backend.onrender.com/healthz` and `/readyz`. Override `LOOP9_*` in `backend/.env.local` if the Render URL changes.
 
+A target on a free hosting tier sleeps and answers slowly on the first request. The probe retries a timeout once and records `timeout` rather than `down`, so a slow wake-up is not reported as an outage. Give it more room with `PROBE_TIMEOUT_SECONDS` in `backend/.env.local`.
+
 ## Ingest a metric
 
 ```bash

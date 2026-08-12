@@ -82,6 +82,7 @@ export function ProjectPage() {
                   <th>Status</th>
                   <th>HTTP</th>
                   <th>ms</th>
+                  <th>Note</th>
                 </tr>
               </thead>
               <tbody>
@@ -92,8 +93,9 @@ export function ProjectPage() {
                     <td>
                       <StatusChip status={row.status} />
                     </td>
-                    <td className="mono">{row.http_code}</td>
+                    <td className="mono">{row.http_code === 0 ? '—' : row.http_code}</td>
                     <td className="mono">{row.latency_ms}</td>
+                    <td className="note">{row.error ?? ''}</td>
                   </tr>
                 ))}
               </tbody>

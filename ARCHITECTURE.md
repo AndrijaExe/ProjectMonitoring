@@ -56,6 +56,19 @@ flowchart TB
 
 Management controls (kill-switch, provider routing, Unreal remote) are out of scope.
 
+## Probes
+
+`HttpHealthProbe` separates three outcomes, because treating them alike makes the console lie:
+
+| Outcome | Status | Meaning |
+|---|---|---|
+| Answered as expected | `ok` / `ready` | Target is healthy |
+| Answered wrong | `error` / `not_ready` | Target is up but unhappy |
+| Refused, DNS failure | `down` | Target is unreachable, reason kept in the snapshot |
+| No answer in time, twice | `timeout` | Probably asleep, not confirmed dead |
+
+Free hosting tiers drop the request that wakes them, so a timeout is retried once before it is recorded. `PROBE_TIMEOUT_SECONDS` (default 20) sets the budget per attempt.
+
 ## Auth
 
 - SPA: `ADMIN_TOKEN` posted to `/api/v1/auth/login`, then sent as `X-Admin-Token`

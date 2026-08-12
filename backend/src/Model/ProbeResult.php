@@ -45,4 +45,13 @@ final readonly class ProbeResult
     {
         return new self(HealthStatus::Down, 0, $latencyMs, $error);
     }
+
+    /**
+     * A host that never answered is not the same as one that refused the connection:
+     * free hosting tiers sleep, and a slow wake-up must not read as an outage.
+     */
+    public static function timedOut(int $latencyMs, string $error): self
+    {
+        return new self(HealthStatus::Timeout, 0, $latencyMs, $error);
+    }
 }

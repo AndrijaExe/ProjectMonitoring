@@ -1,4 +1,11 @@
-export type HealthStatus = 'ok' | 'ready' | 'not_ready' | 'down' | 'error' | 'unseen'
+export type HealthStatus =
+  | 'ok'
+  | 'ready'
+  | 'not_ready'
+  | 'down'
+  | 'timeout'
+  | 'error'
+  | 'unseen'
 
 export type ProbeSnapshot = {
   status: HealthStatus | null
@@ -52,6 +59,7 @@ export function displayStatus(status: string | null | undefined): HealthStatus {
     status === 'ready' ||
     status === 'not_ready' ||
     status === 'down' ||
+    status === 'timeout' ||
     status === 'error'
   ) {
     return status

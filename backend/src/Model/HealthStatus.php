@@ -10,6 +10,7 @@ enum HealthStatus: string
     case Ready = 'ready';
     case NotReady = 'not_ready';
     case Down = 'down';
+    case Timeout = 'timeout';
     case Error = 'error';
 
     public function isHealthy(): bool

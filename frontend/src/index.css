@@ -205,6 +205,7 @@ h2 {
 }
 
 .fleet li[data-status='not_ready'],
+.fleet li[data-status='timeout'],
 .fleet li[data-status='error'] {
   border-left-color: var(--warn);
 }
@@ -275,6 +276,7 @@ h2 {
 }
 
 .chip-not_ready,
+.chip-timeout,
 .chip-error {
   color: var(--warn);
   border-color: rgba(240, 193, 74, 0.45);
@@ -331,6 +333,12 @@ td {
   padding: 0.55rem 0.5rem 0.55rem 0;
   border-bottom: 1px solid rgba(198, 245, 74, 0.08);
   vertical-align: middle;
+}
+
+.note {
+  color: var(--mute);
+  font-size: 0.78rem;
+  max-width: 18ch;
 }
 
 .totals {
