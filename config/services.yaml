@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=../vendor/symfony/dependency-injection/Loader/schema/services.schema.json
+parameters:
+
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+
+    App\:
+        resource: '../src/'
+
+    App\Model\ProjectRepository:
+        alias: App\Adapter\Persistence\JsonProjectRepository
+        public: false
+
+    App\Model\HealthSnapshotStore:
+        alias: App\Adapter\Persistence\JsonHealthSnapshotStore
+        public: false
+
+    App\Model\MetricStore:
+        alias: App\Adapter\Persistence\JsonMetricStore
+        public: false
+
+    App\Model\HealthProbe:
+        alias: App\Adapter\Probe\HttpHealthProbe
+        public: false

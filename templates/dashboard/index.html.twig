@@ -1,0 +1,47 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Console · ProjectMonitoring{% endblock %}
+
+{% block body %}
+<section class="hero">
+    <div>
+        <p class="kicker">Live fleet</p>
+        <h1>What is up right now</h1>
+        <p class="lede">Health polls and ingest counters for every registered game. Loop 9 is seeded; add the next title as another project row.</p>
+    </div>
+    <form method="post" action="/refresh">
+        <button type="submit">Poll all now</button>
+    </form>
+</section>
+
+{% if overview.projects is empty %}
+    <p class="empty">No projects registered yet.</p>
+{% else %}
+    <ul class="fleet">
+        {% for project in overview.projects %}
+            <li>
+                <a href="/projects/{{ project.gameId }}">
+                    <div class="row">
+                        <strong>{{ project.displayName }}</strong>
+                        <span class="mono">{{ project.gameId }}</span>
+                    </div>
+                    <dl>
+                        <div>
+                            <dt>health</dt>
+                            <dd class="status status-{{ project.healthStatus|default('unknown') }}">{{ project.healthStatus|default('unseen') }}</dd>
+                        </div>
+                        <div>
+                            <dt>ready</dt>
+                            <dd class="status status-{{ project.readyStatus|default('unknown') }}">{{ project.readyStatus|default('unseen') }}</dd>
+                        </div>
+                        <div>
+                            <dt>ingest 24h</dt>
+                            <dd class="mono">{{ project.recentMetricCount }}</dd>
+                        </div>
+                    </dl>
+                </a>
+            </li>
+        {% endfor %}
+    </ul>
+{% endif %}
+{% endblock %}
