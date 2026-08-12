@@ -35,4 +35,10 @@ npm run dev
 
 Open `http://127.0.0.1:5173` and sign in with `ADMIN_TOKEN` from `backend/.env` (default `change-me-admin-token`). Vite proxies `/api` to the Symfony server.
 
-Production builds can set `VITE_API_BASE_URL` to the API origin. See `.env.example`.
+## Build and host
+
+```bash
+npm run build   # tsc -b && vite build, output in dist/
+```
+
+Set `VITE_API_BASE_URL` to the API origin when the SPA is not served behind the same host. See `.env.example`. Routing is client-side, so the host must serve `index.html` for unknown paths or `/projects/loop9` breaks on reload.

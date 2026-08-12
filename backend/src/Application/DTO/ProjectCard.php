@@ -51,7 +51,8 @@ final readonly class ProjectCard
             ],
             'metrics' => [
                 'count_24h' => $this->recentMetricCount,
-                'totals_24h' => $this->recentMetricTotals,
+                // Cast keeps the JSON shape an object even when no metric arrived yet.
+                'totals_24h' => (object) $this->recentMetricTotals,
             ],
         ];
     }

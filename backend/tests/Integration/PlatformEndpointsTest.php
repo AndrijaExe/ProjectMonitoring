@@ -42,9 +42,36 @@ final class PlatformEndpointsTest extends WebTestCase
         ]);
 
         self::assertResponseIsSuccessful();
-        $payload = json_decode($client->getResponse()->getContent() ?: '', true);
+        $content = $client->getResponse()->getContent() ?: '';
+        $payload = json_decode($content, true);
         self::assertIsArray($payload);
         self::assertSame('loop9', $payload['projects'][0]['game_id'] ?? null);
+        self::assertStringContainsString('"totals_24h":{}', $content);
+    }
+
+    public function testProjectDetailReturnsHistoryLanes(): void
+    {
+        $client = static::createClient();
+        $client->request('GET', '/api/v1/projects/loop9', server: [
+            'HTTP_X_ADMIN_TOKEN' => 'test-admin-token-ok',
+        ]);
+
+        self::assertResponseIsSuccessful();
+        $payload = json_decode($client->getResponse()->getContent() ?: '', true);
+        self::assertIsArray($payload);
+        self::assertSame('loop9', $payload['project']['game_id'] ?? null);
+        self::assertIsArray($payload['health_history'] ?? null);
+        self::assertIsArray($payload['recent_metrics'] ?? null);
+    }
+
+    public function testProjectDetailRejectsUnknownGame(): void
+    {
+        $client = static::createClient();
+        $client->request('GET', '/api/v1/projects/not-a-game', server: [
+            'HTTP_X_ADMIN_TOKEN' => 'test-admin-token-ok',
+        ]);
+
+        self::assertResponseStatusCodeSame(404);
     }
 
     public function testLoginRejectsBadToken(): void
