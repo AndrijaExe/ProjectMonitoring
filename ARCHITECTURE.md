@@ -10,9 +10,9 @@ SRWA-style hexagonal / DDD-lite layout on both sides, matching the Loop 9 backen
 |---|---|---|
 | Model | `backend/src/Model` | Projects, snapshots, metric samples, outbound ports |
 | Application | `backend/src/Application` | Use cases and dashboard DTOs |
-| Adapter | `backend/src/Adapter` | HTTP JSON, JSON file store, health probe, admin/ingest auth |
+| Adapter | `backend/src/Adapter` | HTTP JSON, Postgres store, health probe, admin/ingest auth |
 
-Dependencies point inward. HTTP adapters call application services. Application depends only on Model types and ports. The JSON store and HttpClient implement those ports through aliases in `backend/config/services.yaml`.
+Dependencies point inward. HTTP adapters call application services. Application depends only on Model types and ports. The PDO stores and HttpClient implement those ports through aliases in `backend/config/services.yaml`.
 
 ## Frontend
 
@@ -43,7 +43,7 @@ flowchart TB
   I --> Ingest[IngestMetricBatch]
   Poll --> Snapshot[RecordHealthSnapshot]
   Snapshot --> Probe[HttpHealthProbe]
-  Overview --> Store[(JSON store)]
+  Overview --> Store[(Postgres)]
   Ingest --> Store
 ```
 
@@ -73,7 +73,26 @@ Free hosting tiers drop the request that wakes them, so a timeout is retried onc
 
 - SPA: `ADMIN_TOKEN` posted to `/api/v1/auth/login`, then sent as `X-Admin-Token`
 - Ingest API: per-project `X-Ingest-Token` compared to a SHA-256 hash
-- CORS allows `localhost` / `127.0.0.1`. Vite proxies `/api` in development.
+- CORS: `CORS_ALLOWED_ORIGINS` lists the origins allowed to call `/api`. An unlisted origin
+  gets no `Access-Control-Allow-Origin` header — there is no wildcard fallback, so a
+  half-configured deploy fails closed. Empty means localhost only, for development, where
+  Vite proxies `/api` anyway.
+- The container refuses to boot in `prod` with a missing, example, or too-short
+  `ADMIN_TOKEN`, because the image carries development defaults in `.env`.
+
+## Hosting
+
+`render.yaml` describes the whole stack, so the topology is reviewable in the repo instead
+of clicked together in a dashboard: a Docker web service for the API, a static site for the
+console, managed Postgres, and a cron job running `app:poll-health` every five minutes.
+
+The API image is Apache + PHP 8.4 with `pdo_pgsql`, built in two stages so Composer never
+ships into the runtime layer. `docker/entrypoint.sh` binds Apache to Render's `$PORT`,
+validates the admin token, and applies the schema before serving. The console build reads
+the API's public hostname from `API_HOST`, so no environment has a URL baked into source.
+
+The cron job matters more than it looks: without it, snapshots only exist for moments when
+somebody had the page open. Steps are in [DEPLOY.md](DEPLOY.md).
 
 ## Persistence
 

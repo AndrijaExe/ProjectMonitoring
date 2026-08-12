@@ -42,3 +42,5 @@ npm run build   # tsc -b && vite build, output in dist/
 ```
 
 Set `VITE_API_BASE_URL` to the API origin when the SPA is not served behind the same host. See `.env.example`. Routing is client-side, so the host must serve `index.html` for unknown paths or `/projects/loop9` breaks on reload.
+
+On Render both of those are handled: `render.yaml` sets the rewrite rule and passes the API hostname to the build as `API_HOST`, which `vite.config.ts` turns into the base URL. See [DEPLOY.md](../DEPLOY.md).

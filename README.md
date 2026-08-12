@@ -7,7 +7,8 @@ backend/   Symfony 8 JSON API on Postgres
 frontend/  React + TypeScript + Redux Toolkit
 ```
 
-Architecture: [ARCHITECTURE.md](ARCHITECTURE.md).
+Architecture: [ARCHITECTURE.md](ARCHITECTURE.md). Hosting it so the board is reachable from
+anywhere, plus scheduled polling: [DEPLOY.md](DEPLOY.md).
 
 ## Local run
 
@@ -70,6 +71,14 @@ cd frontend && npm run build
 ```
 
 Tests use the separate `monitoring_test` database and truncate between cases, so they never touch your dev data.
+
+## Deploy
+
+`render.yaml` creates the API, the console, Postgres, and a five-minute poll cron in one
+Blueprint. Steps and the two values you set by hand are in [DEPLOY.md](DEPLOY.md).
+
+Browsers only reach the API from origins listed in `CORS_ALLOWED_ORIGINS`. Empty means
+localhost only, which is what you want in development.
 
 ## Add another game later
 
