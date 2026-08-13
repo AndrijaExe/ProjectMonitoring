@@ -280,10 +280,19 @@ final class RenderLogSource implements LogSource
 
         return new LogLine(
             $this->timestamp($entry['timestamp'] ?? null),
-            trim((string) ($entry['message'] ?? '')),
+            $this->plain((string) ($entry['message'] ?? '')),
             $labels['level'] ?? null,
             $labels['type'] ?? null,
         );
+    }
+
+    /**
+     * Render colours its own platform lines for a terminal. In a browser the escape codes
+     * arrive as literal noise in front of every word worth reading.
+     */
+    private function plain(string $message): string
+    {
+        return trim((string) preg_replace('/\e\[[0-9;?]*[ -\/]*[@-~]/', '', $message));
     }
 
     private function timestamp(mixed $raw): \DateTimeImmutable

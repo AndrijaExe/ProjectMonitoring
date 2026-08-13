@@ -104,6 +104,28 @@ final class RenderLogSourceTest extends TestCase
         ));
     }
 
+    public function testTerminalColoursAreStrippedFromRendersOwnLines(): void
+    {
+        $client = new MockHttpClient(function (string $method, string $url): MockResponse {
+            if (str_contains($url, '/services')) {
+                return new MockResponse(json_encode([
+                    ['service' => ['id' => 'srv-123', 'ownerId' => 'tea-9', 'name' => 'loop9-backend']],
+                ]));
+            }
+
+            return new MockResponse(json_encode(['logs' => [
+                $this->entry("\e[0;32m\e[1m==> \e[1mYour service is live\e[0m", '2026-08-13T09:00:00+00:00'),
+            ]]));
+        });
+
+        $lines = (new RenderLogSource($client, new ArrayAdapter(), 'rnd_key'))
+            ->recent($this->project(), new LogFilter())
+            ->lines;
+
+        // A browser renders the escape codes as literal noise in front of the message.
+        self::assertSame('==> Your service is live', $lines[0]->message);
+    }
+
     public function testTheMonitorReadsOnlyItsOwnServiceWhenLookingAtItself(): void
     {
         $requests = [];
