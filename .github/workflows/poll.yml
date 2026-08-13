@@ -4,10 +4,14 @@ name: Poll health
 # API instance awake, which means the console usually loads without a cold start.
 on:
   schedule:
-    # Five minutes rather than ten: GitHub delays scheduled runs under load, and a gap
-    # longer than 15 minutes lets the free instance sleep, which costs a 40 second wake-up
-    # on the next visit. Minutes are free on a public repository.
-    - cron: '*/5 * * * *'
+    # Hourly, and the reason is money rather than politeness. A workspace gets 750 free
+    # instance hours a month, shared by every free service in it, and a month is 730 hours.
+    # Polling every five minutes never lets a service sleep, so two services awake around
+    # the clock would need 1460 hours and Render would suspend both partway through the
+    # month, the game included. An hourly poll wakes each service for its 15 minute idle
+    # window, which is a quarter of the time, so the pair costs about 364 hours and leaves
+    # room for real players.
+    - cron: '0 * * * *'
   workflow_dispatch:
 
 concurrency:
@@ -19,6 +23,30 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      # A free Render service that is asleep cannot be woken from another Render service:
+      # the edge answers 429 to the request that would have started it, so the probe never
+      # reaches the target and the console can only record "throttled". The same request
+      # from anywhere else wakes it normally, so the wake-up happens here, from a runner.
+      - name: Wake the targets from outside Render
+        env:
+          WARM_URLS: ${{ vars.WARM_URLS }}
+        run: |
+          set -u
+
+          if [ -z "${WARM_URLS:-}" ]; then
+            echo 'No WARM_URLS variable, skipping. Probes will read throttled if a target sleeps.'
+            exit 0
+          fi
+
+          for url in ${WARM_URLS}; do
+            # Waking takes about a minute, and a failure here is not a verdict: the probe
+            # that follows is what decides whether the target is healthy.
+            code=$(curl -sS -o /dev/null -w '%{http_code}' \
+              --max-time 120 --retry 2 --retry-delay 10 --retry-all-errors \
+              "${url}" || echo '000')
+            echo "woke ${url} -> ${code}"
+          done
+
       - name: Ask the API to probe every project
         env:
           API_URL: ${{ vars.API_URL }}

@@ -68,6 +68,7 @@ warning at startup when the variable is empty.
 five minutes. Under Settings > Secrets and variables > Actions add:
 
 - Variable `API_URL` — `https://monitoring-api.onrender.com`
+- Variable `WARM_URLS` — space separated target URLs, e.g. `https://loop9-backend.onrender.com/healthz`
 - Secret `ADMIN_TOKEN` — the generated value from step 3
 
 Run it once by hand from the Actions tab to confirm. A green run prints `{"polled":2}`.
@@ -75,15 +76,27 @@ Run it once by hand from the Actions tab to confirm. A green run prints `{"polle
 This does double duty: it fills the history while nobody is watching, and it keeps the free
 instance awake, so the console usually loads without a cold start.
 
+The run wakes the targets before asking the API to probe them, and that order is not
+cosmetic. **A sleeping free service cannot be woken from another Render service.** The edge
+answers `429` to the request that would have started it, so the probe never arrives and the
+console can only record `throttled`. That is a trap rather than noise: once a target falls
+asleep, the monitor can never wake it again by itself, and every later probe reports the same
+thing until somebody loads the site from outside. The runner does not have that problem.
+
 Two things that will eventually bite:
 
 - **GitHub disables scheduled workflows after 60 days without repository activity.** If the
   board goes quiet, check the Actions tab first.
-- Polling keeps the instance running roughly 24/7, and Render's free tier allows 750
-  instance hours a month against a month's 730. One service fits; a second free service
-  would not. Minutes are free here because the repository is public — on a private one,
-  five-minute runs would blow through the 2,000 monthly minutes, since GitHub rounds every
-  job up to a full minute.
+- **The poll interval is a budget, not a preference.** A workspace gets 750 free instance
+  hours a month, shared by every free service in it, and a month is 730 hours. A service
+  stays up for 15 minutes after its last request, so an hourly poll costs each service a
+  quarter of the month, about 182 hours, and the API plus one game come to roughly 364.
+  A five-minute poll never lets either sleep: 1460 hours, and Render suspends every free
+  service in the workspace — the game included — until the next month. Shortening the cron
+  means paying for one of the two services. Watch the number on the Billing page.
+- GitHub Actions minutes are free here because the repository is public. On a private one,
+  hourly runs are fine, but five-minute runs would eat the 2,000 monthly minutes, since
+  GitHub rounds every job up to a full minute.
 
 ## 5. Logs in the console (optional)
 
