@@ -19,7 +19,7 @@ final class GetProjectLogs
     }
 
     /**
-     * @return array{configured: bool, lines: list<array<string, mixed>>, note: ?string}
+     * @return array{configured: bool, source: ?string, lines: list<array<string, mixed>>, note: ?string}
      */
     public function execute(string $gameId, LogFilter $filter): array
     {
@@ -31,6 +31,7 @@ final class GetProjectLogs
         if (!$this->logs->isConfigured()) {
             return [
                 'configured' => false,
+                'source' => null,
                 'lines' => [],
                 'note' => 'Set RENDER_API_KEY on the API service to read logs here.',
             ];
@@ -39,10 +40,11 @@ final class GetProjectLogs
         // An upstream that will not answer is reported as an empty panel with a reason,
         // not as a broken page: the rest of the project view is still worth reading.
         try {
-            $lines = $this->logs->recent($project, $filter);
+            $page = $this->logs->recent($project, $filter);
         } catch (LogsUnavailable $exception) {
             return [
                 'configured' => true,
+                'source' => null,
                 'lines' => [],
                 'note' => $exception->getMessage(),
             ];
@@ -50,7 +52,8 @@ final class GetProjectLogs
 
         return [
             'configured' => true,
-            'lines' => array_map(static fn ($line): array => $line->toArray(), $lines),
+            'source' => $page->source,
+            'lines' => array_map(static fn ($line): array => $line->toArray(), $page->lines),
             'note' => null,
         ];
     }

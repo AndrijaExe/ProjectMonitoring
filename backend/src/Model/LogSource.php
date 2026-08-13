@@ -14,18 +14,14 @@ interface LogSource
     public function isConfigured(): bool;
 
     /**
-     * @return list<LogLine> newest first
-     *
      * @throws LogsUnavailable when the upstream cannot be reached or refuses the query
      */
-    public function recent(Project $project, LogFilter $filter): array;
+    public function recent(Project $project, LogFilter $filter): LogPage;
 
     /**
      * Reads a host's own logs, for the monitor looking at itself.
      *
-     * @return list<LogLine> newest first
-     *
      * @throws LogsUnavailable
      */
-    public function recentForService(string $serviceId, LogFilter $filter): array;
+    public function recentForService(string $serviceId, LogFilter $filter): LogPage;
 }

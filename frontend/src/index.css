@@ -392,6 +392,13 @@ td {
   margin: 0;
 }
 
+.logs-source {
+  margin-left: 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+
 .logs-filters {
   display: flex;
   flex-wrap: wrap;

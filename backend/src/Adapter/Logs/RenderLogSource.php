@@ -6,6 +6,7 @@ namespace App\Adapter\Logs;
 
 use App\Model\LogFilter;
 use App\Model\LogLine;
+use App\Model\LogPage;
 use App\Model\LogSource;
 use App\Model\LogsUnavailable;
 use App\Model\Project;
@@ -41,16 +42,16 @@ final class RenderLogSource implements LogSource
         return trim($this->apiKey) !== '';
     }
 
-    public function recent(Project $project, LogFilter $filter): array
+    public function recent(Project $project, LogFilter $filter): LogPage
     {
         if (!$this->isConfigured()) {
             throw new LogsUnavailable('RENDER_API_KEY is not set.');
         }
 
-        return $this->lines($this->service($project), $filter);
+        return $this->page($this->service($project), $filter);
     }
 
-    public function recentForService(string $serviceId, LogFilter $filter): array
+    public function recentForService(string $serviceId, LogFilter $filter): LogPage
     {
         if (!$this->isConfigured()) {
             throw new LogsUnavailable('RENDER_API_KEY is not set.');
@@ -60,8 +61,8 @@ final class RenderLogSource implements LogSource
             throw new LogsUnavailable('No service id. RENDER_SERVICE_ID is only set when running on Render.');
         }
 
-        /** @var array{id: string, ownerId: string} $service */
-        $service = $this->cache->get('render_owner_'.$serviceId, function (ItemInterface $item) use ($serviceId): array {
+        /** @var array{id: string, ownerId: string, name: string} $service */
+        $service = $this->cache->get('render_self_'.$serviceId, function (ItemInterface $item) use ($serviceId): array {
             $item->expiresAfter(self::SERVICE_LOOKUP_TTL);
 
             $payload = $this->get('/services/'.rawurlencode($serviceId), []);
@@ -70,15 +71,13 @@ final class RenderLogSource implements LogSource
             return $this->identity($service);
         });
 
-        return $this->lines($service, $filter);
+        return $this->page($service, $filter);
     }
 
     /**
-     * @param array{id: string, ownerId: string} $service
-     *
-     * @return list<LogLine>
+     * @param array{id: string, ownerId: string, name: string} $service
      */
-    private function lines(array $service, LogFilter $filter): array
+    private function page(array $service, LogFilter $filter): LogPage
     {
         $query = [
             'ownerId' => $service['ownerId'],
@@ -108,17 +107,21 @@ final class RenderLogSource implements LogSource
             $lines[] = $this->toLine($entry);
         }
 
-        return $lines;
+        // Render does not promise an order and has answered oldest first, which buries the
+        // line that made someone open the panel under a screen of routine ones.
+        usort($lines, static fn (LogLine $a, LogLine $b): int => $b->at <=> $a->at);
+
+        return new LogPage($service['name'], $lines);
     }
 
     /**
-     * @return array{id: string, ownerId: string}
+     * @return array{id: string, ownerId: string, name: string}
      */
     private function service(Project $project): array
     {
         $host = $this->renderHost($project->healthUrl);
 
-        /** @var array{id: string, ownerId: string} */
+        /** @var array{id: string, ownerId: string, name: string} */
         return $this->cache->get('render_service_'.str_replace('.', '_', $host), function (ItemInterface $item) use ($host): array {
             $item->expiresAfter(self::SERVICE_LOOKUP_TTL);
 
@@ -127,7 +130,7 @@ final class RenderLogSource implements LogSource
     }
 
     /**
-     * @return array{id: string, ownerId: string}
+     * @return array{id: string, ownerId: string, name: string}
      */
     private function resolve(string $host): array
     {
@@ -164,7 +167,7 @@ final class RenderLogSource implements LogSource
     /**
      * @param array<string, mixed> $service
      *
-     * @return array{id: string, ownerId: string}
+     * @return array{id: string, ownerId: string, name: string}
      */
     private function identity(array $service): array
     {
@@ -175,6 +178,7 @@ final class RenderLogSource implements LogSource
         return [
             'id' => (string) $service['id'],
             'ownerId' => (string) $service['ownerId'],
+            'name' => (string) ($service['name'] ?? $service['id']),
         ];
     }
 

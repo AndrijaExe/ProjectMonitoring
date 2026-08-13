@@ -123,7 +123,13 @@ integration is misconfigured.
 The fleet page reads the monitor's own logs through the same port. When the board looks wrong,
 the first question is whether the game is broken or the watcher is, and answering it should not
 mean opening the Render dashboard. Render injects `RENDER_SERVICE_ID` into every service, so the
-API finds itself without being configured; off Render the panel says so and stays empty.
+API finds itself without being configured; off Render the panel says so and stays empty. Each
+query names one service and only that one, so the fleet panel cannot show a game's lines even
+though the monitor's own lines often talk about a game.
+
+A page of lines carries the name of the service that wrote them, and the newest line is first.
+Render answers in its own order and does not promise one, and an unattributed panel of log
+output next to a second panel of log output is an invitation to read the wrong one.
 
 ## Game counters
 

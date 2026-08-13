@@ -42,7 +42,10 @@ export function LogPanel({ title, gameId }: Props) {
   return (
     <section className="logs">
       <div className="logs-head">
-        <h2>{title}</h2>
+        <h2>
+          {title}
+          {data?.source != null ? <span className="logs-source mono">{data.source}</span> : null}
+        </h2>
         <form className="logs-filters" onSubmit={submit}>
           <select
             aria-label="Log level"

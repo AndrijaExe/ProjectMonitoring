@@ -6,6 +6,7 @@ namespace App\Tests\Support;
 
 use App\Model\LogFilter;
 use App\Model\LogLine;
+use App\Model\LogPage;
 use App\Model\LogSource;
 use App\Model\LogsUnavailable;
 use App\Model\Project;
@@ -38,21 +39,21 @@ final class FakeLogSource implements LogSource
         return $this->configured;
     }
 
-    public function recent(Project $project, LogFilter $filter): array
+    public function recent(Project $project, LogFilter $filter): LogPage
     {
         if ($this->failure !== null) {
             throw $this->failure;
         }
 
-        return $this->lines;
+        return new LogPage('a-render-service', $this->lines);
     }
 
-    public function recentForService(string $serviceId, LogFilter $filter): array
+    public function recentForService(string $serviceId, LogFilter $filter): LogPage
     {
         if ($this->failure !== null) {
             throw $this->failure;
         }
 
-        return $this->lines;
+        return new LogPage('monitoring-api', $this->lines);
     }
 }

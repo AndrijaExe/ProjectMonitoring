@@ -56,8 +56,12 @@ final class RenderLogSourceTest extends TestCase
         });
 
         $source = new RenderLogSource($client, new ArrayAdapter(), 'rnd_key');
-        $lines = $source->recent($this->project(), new LogFilter(50, 'info', 'chat'));
+        $page = $source->recent($this->project(), new LogFilter(50, 'info', 'chat'));
+        $lines = $page->lines;
 
+        // The panel names whoever wrote the lines, so two services on one screen cannot be
+        // mistaken for each other.
+        self::assertSame('loop9-backend', $page->source);
         self::assertCount(1, $lines);
         self::assertSame('Chat request finished', $lines[0]->message);
         self::assertSame('info', $lines[0]->level);
@@ -71,6 +75,71 @@ final class RenderLogSourceTest extends TestCase
         self::assertStringContainsString('level=info', $requests[1]);
         // Render matches log text with wildcards, so a bare term would find nothing.
         self::assertStringContainsString('text=%2Achat%2A', $requests[1]);
+    }
+
+    public function testLinesComeBackNewestFirstWhateverOrderRenderUsed(): void
+    {
+        $client = new MockHttpClient(function (string $method, string $url): MockResponse {
+            if (str_contains($url, '/services')) {
+                return new MockResponse(json_encode([
+                    ['service' => ['id' => 'srv-123', 'ownerId' => 'tea-9', 'name' => 'loop9-backend']],
+                ]));
+            }
+
+            return new MockResponse(json_encode(['logs' => [
+                $this->entry('oldest', '2026-08-13T07:00:00+00:00'),
+                $this->entry('newest', '2026-08-13T09:00:00+00:00'),
+                $this->entry('middle', '2026-08-13T08:00:00+00:00'),
+            ]]));
+        });
+
+        $lines = (new RenderLogSource($client, new ArrayAdapter(), 'rnd_key'))
+            ->recent($this->project(), new LogFilter())
+            ->lines;
+
+        // Oldest first buries the line that made somebody open the panel.
+        self::assertSame(['newest', 'middle', 'oldest'], array_map(
+            static fn ($line): string => $line->message,
+            $lines,
+        ));
+    }
+
+    public function testTheMonitorReadsOnlyItsOwnServiceWhenLookingAtItself(): void
+    {
+        $requests = [];
+        $client = new MockHttpClient(function (string $method, string $url) use (&$requests): MockResponse {
+            $requests[] = $url;
+
+            if (str_contains($url, '/services/')) {
+                return new MockResponse(json_encode(
+                    ['id' => 'srv-self', 'ownerId' => 'tea-9', 'name' => 'monitoring-api'],
+                ));
+            }
+
+            return new MockResponse(json_encode(['logs' => []]));
+        });
+
+        $page = (new RenderLogSource($client, new ArrayAdapter(), 'rnd_key'))
+            ->recentForService('srv-self', new LogFilter());
+
+        self::assertSame('monitoring-api', $page->source);
+        self::assertStringContainsString('/services/srv-self', $requests[0]);
+        // One resource, and it is not the game's.
+        self::assertStringContainsString('resource=srv-self', $requests[1]);
+        self::assertStringNotContainsString('srv-123', $requests[1]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function entry(string $message, string $timestamp): array
+    {
+        return [
+            'id' => 'log-'.$message,
+            'message' => $message,
+            'timestamp' => $timestamp,
+            'labels' => [['name' => 'level', 'value' => 'info']],
+        ];
     }
 
     public function testTheServiceLookupHappensOncePerName(): void

@@ -64,6 +64,8 @@ export type LogLine = {
 export type ProjectLogs = {
   /** False when the host has no API key wired, which is a setup step rather than a fault. */
   configured: boolean
+  /** The host that wrote these lines, so a panel is never read as the wrong service's. */
+  source: string | null
   lines: LogLine[]
   note: string | null
 }

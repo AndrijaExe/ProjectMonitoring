@@ -24,27 +24,29 @@ final class GetSystemLogs
     }
 
     /**
-     * @return array{configured: bool, lines: list<array<string, mixed>>, note: ?string}
+     * @return array{configured: bool, source: ?string, lines: list<array<string, mixed>>, note: ?string}
      */
     public function execute(LogFilter $filter): array
     {
         if (!$this->logs->isConfigured()) {
             return [
                 'configured' => false,
+                'source' => null,
                 'lines' => [],
                 'note' => 'Set RENDER_API_KEY on the API service to read logs here.',
             ];
         }
 
         try {
-            $lines = $this->logs->recentForService($this->serviceId, $filter);
+            $page = $this->logs->recentForService($this->serviceId, $filter);
         } catch (LogsUnavailable $exception) {
-            return ['configured' => true, 'lines' => [], 'note' => $exception->getMessage()];
+            return ['configured' => true, 'source' => null, 'lines' => [], 'note' => $exception->getMessage()];
         }
 
         return [
             'configured' => true,
-            'lines' => array_map(static fn ($line): array => $line->toArray(), $lines),
+            'source' => $page->source,
+            'lines' => array_map(static fn ($line): array => $line->toArray(), $page->lines),
             'note' => null,
         ];
     }
