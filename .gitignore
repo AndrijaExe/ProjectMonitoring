@@ -7,3 +7,4 @@
 /frontend/dist/
 .phpunit.cache/
 .DS_Store
+response.json
