@@ -50,7 +50,10 @@ export function ProjectPage() {
   const card = data.project
   const gauges = Object.entries(card.metrics.gauges ?? {})
   const counters = Object.entries(card.metrics.totals_24h)
-  const lastReadingAt = data.recent_metrics[0]?.recorded_at ?? null
+  // The newest gauge row rather than the newest row of any kind, so the timestamp under the
+  // levels is when the levels were read and not when anything at all was.
+  const lastGaugeAt =
+    data.recent_metrics.find((metric) => metric.tags?.kind === 'gauge')?.recorded_at ?? null
 
   return (
     <Shell
@@ -163,7 +166,7 @@ export function ProjectPage() {
                 ))}
               </ul>
               {/* A level is only as true as the moment it was read. */}
-              <p className="meta">read {formatCheckedAt(lastReadingAt)}</p>
+              <p className="meta">read {formatCheckedAt(lastGaugeAt)}</p>
             </>
           ) : null}
           <h3>Last 24h</h3>

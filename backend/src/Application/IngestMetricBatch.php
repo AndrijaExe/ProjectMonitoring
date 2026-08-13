@@ -12,6 +12,16 @@ use App\Model\ProjectRepository;
 
 final class IngestMetricBatch
 {
+    /**
+     * Tags the monitor writes about a series, so a sender cannot write them.
+     *
+     * "kind" decides how a number is read: a counter is shown as its growth over the window, a
+     * gauge as its newest value alone. That is the monitor's reading of the series, not a fact
+     * the game measures, and a sender who could set it could decide how its own numbers are
+     * totalled. A pushed sample is an event with a value, which is what an untagged sample means.
+     */
+    private const RESERVED_TAGS = ['kind'];
+
     public function __construct(
         private readonly ProjectRepository $projects,
         private readonly MetricStore $metrics,
@@ -58,6 +68,13 @@ final class IngestMetricBatch
                     if (!is_string($key) || !is_scalar($tagValue)) {
                         throw new \InvalidArgumentException('Metric tags must be string keys and scalar values.');
                     }
+
+                    // Dropped rather than refused: the batch is still good data, and a sender
+                    // that never asked to label the series should not lose it over one key.
+                    if (in_array($key, self::RESERVED_TAGS, true)) {
+                        continue;
+                    }
+
                     $tags[$key] = (string) $tagValue;
                 }
             }

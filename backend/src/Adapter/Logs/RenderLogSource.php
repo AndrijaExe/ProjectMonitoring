@@ -122,7 +122,9 @@ final class RenderLogSource implements LogSource
         $host = $this->renderHost($project->healthUrl);
 
         /** @var array{id: string, ownerId: string, name: string} */
-        return $this->cache->get('render_service_'.str_replace('.', '_', $host), function (ItemInterface $item) use ($host): array {
+        // The key carries a version because the cached shape gained a name: an entry written by
+        // the previous release would be read as a service without one.
+        return $this->cache->get('render_service_2_'.str_replace('.', '_', $host), function (ItemInterface $item) use ($host): array {
             $item->expiresAfter(self::SERVICE_LOOKUP_TTL);
 
             return $this->resolve($host);

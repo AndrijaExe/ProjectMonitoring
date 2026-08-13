@@ -30,6 +30,25 @@ final class IngestMetricBatchTest extends TestCase
         self::assertSame(2.0, $metrics->totalsSince(GameId::fromString('loop9'), new \DateTimeImmutable('-1 hour'))['chat.requests']);
     }
 
+    public function testASenderCannotLabelItsOwnSeriesAsAGauge(): void
+    {
+        $projects = $this->projects();
+        $metrics = new InMemoryMetricStore();
+        $useCase = new IngestMetricBatch($projects, $metrics);
+
+        $batch = $useCase->execute('loop9', [
+            ['name' => 'chat.requests', 'value' => 2, 'tags' => ['kind' => 'gauge', 'route' => 'chat']],
+        ]);
+
+        self::assertSame(['route' => 'chat'], $batch->samples[0]->tags);
+
+        $since = new \DateTimeImmutable('-1 hour');
+        $gameId = GameId::fromString('loop9');
+        // Still summed as an event, and absent from the levels shown as "right now".
+        self::assertSame(2.0, $metrics->totalsSince($gameId, $since)['chat.requests']);
+        self::assertSame([], $metrics->latestGauges($gameId, $since));
+    }
+
     public function testRejectsUnknownProject(): void
     {
         $useCase = new IngestMetricBatch(new InMemoryProjectRepository(), new InMemoryMetricStore());

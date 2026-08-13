@@ -56,12 +56,15 @@ final class CollectGameMetrics
         }
 
         $samples = [];
-        foreach ($reading->counters as $name => $value) {
-            $samples[] = new MetricSample($project->gameId, $name, $value, ['kind' => 'counter'], $now);
-        }
 
+        // Gauges first, because the batch below is capped: a level dropped from a reading has no
+        // second chance, while a counter's growth survives in the next one.
         foreach ($reading->gauges as $name => $value) {
             $samples[] = new MetricSample($project->gameId, $name, $value, ['kind' => 'gauge'], $now);
+        }
+
+        foreach ($reading->counters as $name => $value) {
+            $samples[] = new MetricSample($project->gameId, $name, $value, ['kind' => 'counter'], $now);
         }
 
         if ($samples === []) {

@@ -156,6 +156,11 @@ seen inside the window reports zero rather than claiming its lifetime total happ
 reading lower than its baseline means the game's counter store was cleared, and the newest
 reading is then the whole of what has been counted since.
 
+The `kind` tag is written only here, never accepted from a sender: `IngestMetricBatch` drops it
+from a pushed batch. It says how the monitor reads a series rather than anything the game
+measured, and a sender able to set it could decide whether its own numbers are summed for the day
+or shown as a level and never added up at all.
+
 Not every number is a total. Players online is a level: it is true at the moment it was read and
 means nothing added up, so a gauge is stored with `kind=gauge`, kept out of the day's totals, and
 shown as its newest reading with the time it was taken. Eleven is not the answer to four players
