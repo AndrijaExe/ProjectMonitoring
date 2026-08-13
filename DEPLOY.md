@@ -142,6 +142,15 @@ If cold starts get irritating, switch `plan: free` to `plan: starter` on `monito
 ($7/month) and the instance stays warm. That is the only change; the database and the
 schedule can stay where they are.
 
+**When the game goes to production, pay for the game first, not for the monitor.** A paid
+Loop 9 never sleeps, which is what players need anyway, and it stops drawing on the free
+instance hours. That frees the whole 750 for `monitoring-api`, so two things become possible
+at once: the cron in [`poll.yml`](.github/workflows/poll.yml) can go back to `*/5 * * * *`
+for five-minute history, and the wake step stops mattering, since a paid service is always
+up. Leave `WARM_URLS` set regardless — it costs nothing and still covers any free target
+added later. The margin is thinner than it looks: one free service awake around the clock is
+730 hours against 750, so a second one still will not fit.
+
 Going back to fully managed Render Postgres means adding a `databases:` block and pointing
 `DATABASE_URL` at it with `fromDatabase`. Their cron jobs bill by the second with a $1
 monthly minimum per job, so the GitHub Actions schedule stays cheaper regardless.
