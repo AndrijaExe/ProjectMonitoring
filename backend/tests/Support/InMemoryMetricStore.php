@@ -28,9 +28,33 @@ final class InMemoryMetricStore implements MetricStore
 
     public function totalsSince(GameId $gameId, \DateTimeImmutable $since): array
     {
-        $totals = [];
+        /** @var array<string, list<MetricSample>> $bySeries */
+        $bySeries = [];
         foreach ($this->since($gameId, $since) as $sample) {
-            $totals[$sample->name] = ($totals[$sample->name] ?? 0.0) + $sample->value;
+            $bySeries[$sample->name][] = $sample;
+        }
+
+        $totals = [];
+        foreach ($bySeries as $name => $samples) {
+            usort($samples, static fn (MetricSample $a, MetricSample $b): int => $a->recordedAt <=> $b->recordedAt);
+            $first = $samples[0];
+            $last = $samples[count($samples) - 1];
+
+            if (($first->tags['kind'] ?? '') === 'counter') {
+                // Cumulative readings grow; the window total is the growth, not the sum,
+                // measured from wherever the counter stood when the window opened.
+                $baseline = $this->lastValueBefore($gameId, $name, $since) ?? $first->value;
+                $totals[$name] = $last->value >= $baseline
+                    ? $last->value - $baseline
+                    : $last->value;
+
+                continue;
+            }
+
+            $totals[$name] = array_sum(array_map(
+                static fn (MetricSample $sample): float => $sample->value,
+                $samples,
+            ));
         }
         ksort($totals);
 
@@ -45,6 +69,24 @@ final class InMemoryMetricStore implements MetricStore
         ));
 
         return array_slice(array_reverse($filtered), 0, $limit);
+    }
+
+    private function lastValueBefore(GameId $gameId, string $name, \DateTimeImmutable $since): ?float
+    {
+        $earlier = array_values(array_filter(
+            $this->samples,
+            static fn (MetricSample $sample): bool => $sample->gameId->value === $gameId->value
+                && $sample->name === $name
+                && $sample->recordedAt < $since,
+        ));
+
+        if ($earlier === []) {
+            return null;
+        }
+
+        usort($earlier, static fn (MetricSample $a, MetricSample $b): int => $a->recordedAt <=> $b->recordedAt);
+
+        return $earlier[count($earlier) - 1]->value;
     }
 
     /**

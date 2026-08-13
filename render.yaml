@@ -54,6 +54,13 @@ services:
         sync: false
       - key: ALERT_EMAIL_FROM
         value: onboarding@resend.dev
+      # Optional. Where Loop 9 publishes its own counters, and the secret for reading them
+      # as "loop9=<token>". The token must match METRICS_TOKEN on the game's service.
+      # Unset means the console shows probes only, which is what it did before.
+      - key: LOOP9_METRICS_URL
+        value: https://loop9-backend.onrender.com/metrics
+      - key: METRICS_TOKENS
+        sync: false
 
   - type: web
     name: monitoring-console

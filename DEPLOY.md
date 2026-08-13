@@ -166,6 +166,33 @@ Press **Test alert** on the fleet page once after setting this up. It sends a ma
 is the only way to learn that the setup works on a day when nothing is broken. Free instances
 have no shell, so this is also the only way.
 
+## 7. Game counters (optional)
+
+A probe says the web server answered. It says nothing about whether players are getting replies,
+how often an AI provider falls over, or which endings runs reach. Loop 9 publishes those counts
+at `GET /metrics`, and the monitor reads them each time a poll finds the game up.
+
+1. Make one secret: `openssl rand -hex 32`.
+2. On the **Loop 9** service > Environment, add it as `METRICS_TOKEN`, then redeploy.
+3. On `monitoring-api` > Environment, add `METRICS_TOKENS` as `loop9=<the same secret>`.
+   `LOOP9_METRICS_URL` is already set by the blueprint.
+
+Without the token the game's endpoint returns 404 and the console shows probes only, which is
+what it did before. Nothing else breaks.
+
+Two things to expect the first day:
+
+- **The first reading shows zeros.** Counters are lifetime totals, so "last 24 hours" is the
+  difference between two readings and there is only one until the next poll. Growth appears
+  from the second poll on.
+- **A number can drop.** The game keeps its counters in Redis; if that key is lost the count
+  restarts, and the console reads the new reading as everything counted since. It means the
+  counter store was cleared, not that the game un-happened.
+
+Counters are read only when the health probe just came back `ok`. Asking a sleeping instance
+would spend the timeout budget again to learn what the probe already reported, and with hourly
+polling that budget is the thing keeping the free plan affordable.
+
 ## Free tier limits worth knowing
 
 - The API sleeps after 15 minutes without traffic and takes close to a minute to wake. The

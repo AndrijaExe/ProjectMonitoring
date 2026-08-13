@@ -113,6 +113,64 @@ final class PostgresStoreTest extends TestCase
         );
     }
 
+    public function testCumulativeCountersReportGrowthWhilePushedSamplesStillSum(): void
+    {
+        $store = new PdoMetricStore(TestDatabase::connection());
+        $now = new \DateTimeImmutable();
+        $counter = ['kind' => 'counter'];
+
+        $store->recordBatch(new MetricBatch([
+            new MetricSample($this->loop9, 'chat.messages', 1000.0, $counter, $now->modify('-3 hours')),
+            new MetricSample($this->loop9, 'chat.messages', 1042.0, $counter, $now->modify('-1 hour')),
+            new MetricSample($this->loop9, 'chat.messages', 1050.0, $counter, $now),
+            new MetricSample($this->loop9, 'chat.errors', 2.0, [], $now),
+            new MetricSample($this->loop9, 'chat.errors', 3.0, [], $now->modify('-1 hour')),
+        ]));
+
+        self::assertSame(
+            // 50 of growth, not 3092 of stacked lifetime readings.
+            ['chat.errors' => 5.0, 'chat.messages' => 50.0],
+            $store->totalsSince($this->loop9, $now->modify('-24 hours')),
+        );
+    }
+
+    public function testGrowthIsMeasuredFromTheLastReadingBeforeTheWindow(): void
+    {
+        $store = new PdoMetricStore(TestDatabase::connection());
+        $now = new \DateTimeImmutable();
+        $counter = ['kind' => 'counter'];
+
+        $store->recordBatch(new MetricBatch([
+            new MetricSample($this->loop9, 'chat.messages', 100.0, $counter, $now->modify('-30 hours')),
+            new MetricSample($this->loop9, 'chat.messages', 180.0, $counter, $now->modify('-20 hours')),
+            new MetricSample($this->loop9, 'chat.messages', 200.0, $counter, $now),
+        ]));
+
+        // Measuring from the first reading inside the window would lose the 80 that happened
+        // between the reading before it and the one after.
+        self::assertSame(
+            ['chat.messages' => 100.0],
+            $store->totalsSince($this->loop9, $now->modify('-24 hours')),
+        );
+    }
+
+    public function testACounterReadingLowerThanBeforeCountsFromTheReset(): void
+    {
+        $store = new PdoMetricStore(TestDatabase::connection());
+        $now = new \DateTimeImmutable();
+        $counter = ['kind' => 'counter'];
+
+        $store->recordBatch(new MetricBatch([
+            new MetricSample($this->loop9, 'chat.messages', 900.0, $counter, $now->modify('-2 hours')),
+            new MetricSample($this->loop9, 'chat.messages', 7.0, $counter, $now),
+        ]));
+
+        self::assertSame(
+            ['chat.messages' => 7.0],
+            $store->totalsSince($this->loop9, $now->modify('-24 hours')),
+        );
+    }
+
     public function testRecentMetricsKeepTagsAndOrder(): void
     {
         $store = new PdoMetricStore(TestDatabase::connection());

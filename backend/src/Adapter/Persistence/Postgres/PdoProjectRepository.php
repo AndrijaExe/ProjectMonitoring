@@ -17,13 +17,14 @@ final class PdoProjectRepository implements ProjectRepository
     public function save(Project $project): void
     {
         $statement = $this->connection->pdo()->prepare(<<<'SQL'
-            INSERT INTO projects (game_id, display_name, health_url, ready_url, ingest_token_hash)
-            VALUES (:game_id, :display_name, :health_url, :ready_url, :ingest_token_hash)
+            INSERT INTO projects (game_id, display_name, health_url, ready_url, ingest_token_hash, metrics_url)
+            VALUES (:game_id, :display_name, :health_url, :ready_url, :ingest_token_hash, :metrics_url)
             ON CONFLICT (game_id) DO UPDATE SET
                 display_name = EXCLUDED.display_name,
                 health_url = EXCLUDED.health_url,
                 ready_url = EXCLUDED.ready_url,
-                ingest_token_hash = EXCLUDED.ingest_token_hash
+                ingest_token_hash = EXCLUDED.ingest_token_hash,
+                metrics_url = EXCLUDED.metrics_url
             SQL);
 
         $statement->execute([
@@ -32,6 +33,7 @@ final class PdoProjectRepository implements ProjectRepository
             'health_url' => $project->healthUrl,
             'ready_url' => $project->readyUrl,
             'ingest_token_hash' => $project->ingestTokenHash,
+            'metrics_url' => $project->metricsUrl,
         ]);
     }
 
@@ -60,12 +62,15 @@ final class PdoProjectRepository implements ProjectRepository
      */
     private function hydrate(array $row): Project
     {
+        $metricsUrl = $row['metrics_url'] ?? null;
+
         return new Project(
             GameId::fromString((string) $row['game_id']),
             (string) $row['display_name'],
             (string) $row['health_url'],
             (string) $row['ready_url'],
             (string) $row['ingest_token_hash'],
+            is_string($metricsUrl) && $metricsUrl !== '' ? $metricsUrl : null,
         );
     }
 }

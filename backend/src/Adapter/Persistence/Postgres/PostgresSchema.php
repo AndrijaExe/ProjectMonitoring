@@ -17,6 +17,9 @@ final class PostgresSchema
         )
         SQL,
         <<<'SQL'
+        ALTER TABLE projects ADD COLUMN IF NOT EXISTS metrics_url TEXT NULL
+        SQL,
+        <<<'SQL'
         CREATE TABLE IF NOT EXISTS health_snapshots (
             id BIGSERIAL PRIMARY KEY,
             game_id TEXT NOT NULL REFERENCES projects (game_id) ON DELETE CASCADE,

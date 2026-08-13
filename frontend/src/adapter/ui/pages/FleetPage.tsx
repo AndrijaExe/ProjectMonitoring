@@ -73,7 +73,7 @@ export function FleetPage() {
                   <StatusChip label="health" status={project.health.status} />
                   <StatusChip label="ready" status={project.ready.status} />
                   <span className="chip chip-unseen">
-                    <span className="chip-label">ingest 24h</span>
+                    <span className="chip-label">readings 24h</span>
                     {project.metrics.count_24h}
                   </span>
                 </div>

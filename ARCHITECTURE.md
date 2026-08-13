@@ -56,6 +56,7 @@ flowchart TB
 - Read the target's host logs beside its probe history, and the monitor's own logs
 - Mail the operator when a target changes state
 - Delete a project's probe history from the console
+- Read a game's own counters each time a poll finds it up
 
 Management controls (kill-switch, provider routing, Unreal remote) are out of scope.
 
@@ -123,6 +124,34 @@ The fleet page reads the monitor's own logs through the same port. When the boar
 the first question is whether the game is broken or the watcher is, and answering it should not
 mean opening the Render dashboard. Render injects `RENDER_SERVICE_ID` into every service, so the
 API finds itself without being configured; off Render the panel says so and stays empty.
+
+## Game counters
+
+A probe answers whether the web server replied. It cannot say whether players are getting
+answers, how often a provider falls over, or which endings runs reach. `GameMetricSource` is the
+port for asking the game itself; `HttpGameMetricSource` reads the JSON endpoint Loop 9 publishes.
+
+The monitor pulls rather than the game pushing. A game that reports on a timer needs a scheduler
+it does not have and a copy of this API's credentials, to answer a question this API is already
+awake to ask on its own schedule. The reading rides along with the poll, and only when the health
+probe just came back `ok`: asking a sleeping or rate-limited instance for its counters would
+spend the timeout budget again to learn what the probe already reported.
+
+The scrape token lives in `METRICS_TOKENS` in the environment, as `gameId=token` pairs, not in
+the projects table beside the URL. The ingest token is stored only as a hash for exactly that
+reason, and a read-only credential is still a credential.
+
+Counters are cumulative, so a stored reading is a lifetime figure and the window total is the
+growth between two of them. Summing them would add yesterday to itself all day. Two kinds of
+series therefore share `metric_samples`, told apart by a `kind` tag: pushed samples are events
+and still sum, scraped readings are counters and subtract. Growth is measured from the last
+reading before the window when there is one, so nothing is lost between polls; a series first
+seen inside the window reports zero rather than claiming its lifetime total happened today. A
+reading lower than its baseline means the game's counter store was cleared, and the newest
+reading is then the whole of what has been counted since.
+
+A game that will not answer is logged and skipped. The probe already said whether it is up, and
+a missing counter reading is a gap in the numbers, not an incident.
 
 ## Deleting history
 

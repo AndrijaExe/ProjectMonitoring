@@ -91,7 +91,7 @@ export function ProjectPage() {
         <StatusChip label="health" status={card.health.status} />
         <StatusChip label="ready" status={card.ready.status} />
         <span className="chip chip-unseen">
-          <span className="chip-label">ingest 24h</span>
+          <span className="chip-label">readings 24h</span>
           {card.metrics.count_24h}
         </span>
       </div>
@@ -137,7 +137,7 @@ export function ProjectPage() {
           />
         </article>
         <article>
-          <h2>Recent ingest</h2>
+          <h2>Counters, last 24h</h2>
           {Object.keys(card.metrics.totals_24h).length > 0 ? (
             <ul className="totals">
               {Object.entries(card.metrics.totals_24h).map(([name, total]) => (
@@ -150,7 +150,7 @@ export function ProjectPage() {
           ) : null}
           {data.recent_metrics.length === 0 ? (
             <p className="empty">
-              No metrics yet. POST /api/v1/projects/{card.game_id}/metrics with X-Ingest-Token.
+              No readings yet. Counters are read from the game each time a poll finds it up.
             </p>
           ) : (
             <table>

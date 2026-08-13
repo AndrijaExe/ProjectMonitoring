@@ -51,11 +51,31 @@ final class PdoMetricStore implements MetricStore
 
     public function totalsSince(GameId $gameId, \DateTimeImmutable $since): array
     {
+        // Two kinds of series share this table. A pushed sample is an event with a value, so
+        // the window total is their sum. A scraped counter is a lifetime reading, so the window
+        // total is how much it grew — summing those would add yesterday to itself all day.
         $statement = $this->connection->pdo()->prepare(<<<'SQL'
-            SELECT name, SUM(value) AS total FROM metric_samples
-            WHERE game_id = :game_id AND recorded_at >= :since
-            GROUP BY name
-            ORDER BY name ASC
+            WITH windowed AS (
+                SELECT
+                    name,
+                    COALESCE(MAX(tags ->> 'kind'), '') AS kind,
+                    SUM(value) AS total,
+                    (array_agg(value ORDER BY recorded_at ASC, id ASC))[1] AS first_value,
+                    (array_agg(value ORDER BY recorded_at DESC, id DESC))[1] AS last_value
+                FROM metric_samples
+                WHERE game_id = :game_id AND recorded_at >= :since
+                GROUP BY name
+            ),
+            before AS (
+                SELECT DISTINCT ON (name) name, value
+                FROM metric_samples
+                WHERE game_id = :game_id AND recorded_at < :since
+                ORDER BY name, recorded_at DESC, id DESC
+            )
+            SELECT w.name, w.kind, w.total, w.last_value, COALESCE(b.value, w.first_value) AS baseline
+            FROM windowed w
+            LEFT JOIN before b ON b.name = w.name
+            ORDER BY w.name ASC
             SQL);
         $statement->execute([
             'game_id' => $gameId->value,
@@ -64,10 +84,29 @@ final class PdoMetricStore implements MetricStore
 
         $totals = [];
         foreach ($statement->fetchAll() as $row) {
-            $totals[(string) $row['name']] = (float) $row['total'];
+            $totals[(string) $row['name']] = ((string) $row['kind']) === 'counter'
+                ? self::increase((float) $row['baseline'], (float) $row['last_value'])
+                : (float) $row['total'];
         }
 
         return $totals;
+    }
+
+    /**
+     * Growth from where the counter stood when the window opened.
+     *
+     * The baseline is the last reading before the window when there is one, so growth between
+     * that reading and the first one inside is not lost. A series first seen inside the window
+     * falls back to its own first reading, which understates: claiming its lifetime total
+     * happened today would invent activity, and a monitor inventing activity is worse than one
+     * admitting it arrived late.
+     *
+     * A counter reading lower than its baseline means the store behind it was cleared, so the
+     * newest reading is the whole of what has been counted since.
+     */
+    private static function increase(float $baseline, float $last): float
+    {
+        return $last >= $baseline ? $last - $baseline : $last;
     }
 
     public function recent(GameId $gameId, int $limit = 50): array

@@ -22,6 +22,8 @@ final class ProjectCatalogSeeder
         private readonly string $loop9ReadyUrl,
         #[Autowire('%env(LOOP9_INGEST_TOKEN)%')]
         private readonly string $loop9IngestToken,
+        #[Autowire('%env(LOOP9_METRICS_URL)%')]
+        private readonly string $loop9MetricsUrl = '',
     ) {
     }
 
@@ -40,6 +42,7 @@ final class ProjectCatalogSeeder
             $this->loop9HealthUrl,
             $this->loop9ReadyUrl,
             $hash,
+            $this->loop9MetricsUrl !== '' ? $this->loop9MetricsUrl : null,
         ));
     }
 }

@@ -9,6 +9,7 @@ use App\Model\HealthEndpoint;
 use App\Model\HealthProbe;
 use App\Model\HealthSnapshot;
 use App\Model\HealthSnapshotStore;
+use App\Model\HealthStatus;
 use App\Model\Project;
 use App\Model\ProjectRepository;
 
@@ -19,6 +20,7 @@ final class RecordHealthSnapshot
         private readonly HealthProbe $probe,
         private readonly HealthSnapshotStore $snapshots,
         private readonly AnnounceHealthChange $announce,
+        private readonly CollectGameMetrics $collectMetrics,
     ) {
     }
 
@@ -83,6 +85,12 @@ final class RecordHealthSnapshot
             // that is about to join it.
             $this->announce->forNewSnapshot($project, $snapshot);
             $this->snapshots->record($snapshot);
+        }
+
+        // Only when the game just answered. Asking a sleeping or refused instance for its
+        // counters would spend the timeout budget again to learn what the probe already knows.
+        if ($health->status === HealthStatus::Ok) {
+            $this->collectMetrics->forProject($project, $now);
         }
 
         return $snapshots;

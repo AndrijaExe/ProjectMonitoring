@@ -12,6 +12,8 @@ final readonly class Project
         public string $healthUrl,
         public string $readyUrl,
         public string $ingestTokenHash,
+        /** Where the game publishes its own counters. Null when it publishes none. */
+        public ?string $metricsUrl = null,
     ) {
         if (trim($displayName) === '' || mb_strlen($displayName) > 80) {
             throw new \InvalidArgumentException('Display name must be 1–80 characters.');
@@ -19,6 +21,10 @@ final readonly class Project
 
         $this->assertHttpUrl($healthUrl, 'health_url');
         $this->assertHttpUrl($readyUrl, 'ready_url');
+
+        if ($metricsUrl !== null) {
+            $this->assertHttpUrl($metricsUrl, 'metrics_url');
+        }
 
         if ($ingestTokenHash === '' || strlen($ingestTokenHash) < 32) {
             throw new \InvalidArgumentException('Ingest token hash is missing.');
@@ -33,6 +39,7 @@ final readonly class Project
             $healthUrl,
             $readyUrl,
             $this->ingestTokenHash,
+            $this->metricsUrl,
         );
     }
 
@@ -44,6 +51,7 @@ final readonly class Project
             $this->healthUrl,
             $this->readyUrl,
             $ingestTokenHash,
+            $this->metricsUrl,
         );
     }
 
