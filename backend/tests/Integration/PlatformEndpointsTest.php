@@ -53,6 +53,11 @@ final class PlatformEndpointsTest extends WebTestCase
         self::assertIsArray($payload);
         self::assertSame('loop9', $payload['projects'][0]['game_id'] ?? null);
         self::assertStringContainsString('"totals_24h":{}', $content);
+        // The board travels with its own age, so a console reading it can tell a live fleet
+        // from a frozen one without being told separately.
+        self::assertArrayHasKey('stale', $payload);
+        self::assertArrayHasKey('last_probe_at', $payload);
+        self::assertSame(120, $payload['stale_after_minutes'] ?? null);
     }
 
     public function testProjectDetailReturnsHistoryLanes(): void

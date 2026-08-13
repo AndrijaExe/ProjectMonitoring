@@ -64,8 +64,8 @@ warning at startup when the variable is empty.
 
 ## 4. Scheduled polling
 
-[`.github/workflows/poll.yml`](.github/workflows/poll.yml) calls `POST /api/v1/poll` every
-five minutes. Under Settings > Secrets and variables > Actions add:
+[`.github/workflows/poll.yml`](.github/workflows/poll.yml) calls `POST /api/v1/poll` once an
+hour. Under Settings > Secrets and variables > Actions add:
 
 - Variable `API_URL` — `https://monitoring-api.onrender.com`
 - Variable `WARM_URLS` — space separated target URLs, e.g. `https://loop9-backend.onrender.com/healthz`
@@ -97,6 +97,33 @@ Two things that will eventually bite:
 - GitHub Actions minutes are free here because the repository is public. On a private one,
   hourly runs are fine, but five-minute runs would eat the 2,000 monthly minutes, since
   GitHub rounds every job up to a full minute.
+
+### The dead man's switch
+
+Do this one. Everything above can stop without a sound: a disabled schedule, a rotated
+`ADMIN_TOKEN`, a suspended instance. No probe runs, so no status changes, so no alert is sent,
+and the console keeps showing the last green board it saw. **The failure mode of a monitor is
+silence, and silence is indistinguishable from good news.**
+
+So something outside this repository has to expect the poll and complain when it does not
+arrive:
+
+1. Make a free check at [healthchecks.io](https://healthchecks.io). Period 1 hour, grace
+   period 30 minutes, and your email as the notification method.
+2. Copy its ping URL (`https://hc-ping.com/<uuid>`).
+3. Add it under Settings > Secrets and variables > Actions as the secret `HEARTBEAT_URL`.
+
+The workflow pings that URL after a successful poll, and pings `<url>/fail` when the poll
+fails, so a broken run mails you at once instead of after the grace period. Without the secret
+the step prints that nothing is watching and moves on, so the poll keeps working either way.
+
+Test it the honest way: pause the check in healthchecks.io, or let the grace period lapse
+without running the workflow, and confirm the mail arrives. A switch nobody has ever seen fire
+is a guess.
+
+The console covers the other half. `POLL_MAX_AGE_MINUTES` (default 120, two missed hours) makes
+the fleet page say the schedule has stopped instead of quietly drawing yesterday's statuses.
+That only helps when you are looking, which is why it is the second half and not the first.
 
 ## 5. Logs in the console (optional)
 

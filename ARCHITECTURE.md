@@ -57,6 +57,7 @@ flowchart TB
 - Mail the operator when a target changes state
 - Delete a project's probe history from the console
 - Read a game's own counters each time a poll finds it up
+- Say out loud when the probes themselves have stopped arriving
 
 Management controls (kill-switch, provider routing, Unreal remote) are out of scope.
 
@@ -103,6 +104,23 @@ them when it woke up.
 
 A channel that throws is logged and swallowed. The snapshot is the record that matters, and a
 mail provider having a bad afternoon must not turn a poll into a failure.
+
+### The one alarm this design cannot send
+
+Every alert above depends on a probe running. Nothing here can announce that the probes
+themselves stopped, and stopping is easy: GitHub disables a schedule after 60 days without a
+commit, a rotated `ADMIN_TOKEN` makes every run fail, a suspended instance answers nothing. In
+all three the console keeps drawing the last statuses it recorded, and green from last week
+looks exactly like green from a minute ago. **A monitor's characteristic failure is silence.**
+
+Two things close that, and neither lives in the alert path. The scheduled run reports to an
+external heartbeat service after each successful poll, so the complaint about a missing poll
+comes from a machine that is not this one; it also reports failures immediately rather than
+waiting for a grace period to expire. And `GetMonitoringOverview` publishes the age of the
+newest probe with the board, so a fleet page whose data has gone quiet says so instead of
+implying the fleet is fine. The heartbeat covers the hours nobody is watching; the banner
+covers the moment somebody is. A poll that answers `200` while probing nothing counts as a
+failed run, because a monitor watching zero projects is not a working monitor.
 
 ## Logs
 

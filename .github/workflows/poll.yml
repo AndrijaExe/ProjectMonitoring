@@ -75,3 +75,51 @@ jobs:
             echo "Poll failed with HTTP ${code}." >&2
             exit 1
           fi
+
+          # A 200 that probed nothing is not a healthy poll. It means the projects table is
+          # empty or unreadable, and every status in the console is then quietly frozen.
+          polled=$(jq -r '.polled // 0' response.json 2>/dev/null || echo 0)
+          case "${polled}" in '' | *[!0-9]*) polled=0 ;; esac
+
+          if [ "${polled}" -lt 1 ]; then
+            echo 'The API answered 200 but probed no projects.' >&2
+            exit 1
+          fi
+
+          echo "Probed ${polled} endpoints."
+
+      # Everything above can stop happening without anyone hearing it. A suspended instance,
+      # an expired token, or GitHub disabling this schedule after 60 days without a commit
+      # all end the same way: no probe runs, so no status changes, so no alert is sent, and
+      # the console keeps showing yesterday's green. This ping is the question asked from the
+      # outside instead: a run that does not report in makes the heartbeat service mail you.
+      - name: Report to the dead man's switch
+        if: ${{ always() }}
+        env:
+          HEARTBEAT_URL: ${{ secrets.HEARTBEAT_URL }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -u
+
+          if [ -z "${HEARTBEAT_URL:-}" ]; then
+            echo 'No HEARTBEAT_URL secret, so nothing outside this workflow would notice if it stopped.'
+            exit 0
+          fi
+
+          # A cancelled run was somebody's decision, and they do not need a mail about it.
+          if [ "${JOB_STATUS}" = 'cancelled' ]; then
+            echo 'Run cancelled, so no heartbeat either way.'
+            exit 0
+          fi
+
+          # Failing loudly beats waiting for the grace period to run out: healthchecks.io
+          # alerts on /fail at once, and a poll that failed is already worth knowing about.
+          if [ "${JOB_STATUS}" = 'success' ]; then
+            target="${HEARTBEAT_URL%/}"
+          else
+            target="${HEARTBEAT_URL%/}/fail"
+          fi
+
+          # Never the reason the workflow goes red: the poll's own verdict decides that.
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 --retry 2 "${target}" || echo '000')
+          echo "heartbeat (${JOB_STATUS}) -> ${code}"

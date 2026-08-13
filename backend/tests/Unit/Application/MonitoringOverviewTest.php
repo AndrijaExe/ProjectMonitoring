@@ -10,6 +10,7 @@ use App\Application\GetMonitoringOverview;
 use App\Application\RecordHealthSnapshot;
 use App\Model\GameId;
 use App\Model\HealthEndpoint;
+use App\Model\HealthSnapshot;
 use App\Model\HealthStatus;
 use App\Model\IngestToken;
 use App\Model\ProbeResult;
@@ -51,5 +52,91 @@ final class MonitoringOverviewTest extends TestCase
         self::assertSame('ok', $overview->projects[0]->healthStatus);
         self::assertSame('ready', $overview->projects[0]->readyStatus);
         self::assertSame(18, $overview->projects[0]->healthLatencyMs);
+        self::assertFalse($overview->stale);
+    }
+
+    public function testAProbeOlderThanTheWindowIsReportedAsStale(): void
+    {
+        $snapshots = new InMemoryHealthSnapshotStore();
+        $snapshots->record($this->snapshotFrom('-3 hours'));
+
+        $overview = $this->overviewOver($snapshots)->execute();
+
+        self::assertTrue($overview->stale);
+        self::assertNotNull($overview->lastProbeAt);
+        self::assertSame(120, $overview->staleAfterMinutes);
+    }
+
+    public function testARecentProbeIsNotStale(): void
+    {
+        $snapshots = new InMemoryHealthSnapshotStore();
+        $snapshots->record($this->snapshotFrom('-10 minutes'));
+
+        self::assertFalse($this->overviewOver($snapshots)->execute()->stale);
+    }
+
+    public function testAProjectNeverProbedIsStaleBecauseNobodyIsWatchingItEither(): void
+    {
+        $overview = $this->overviewOver(new InMemoryHealthSnapshotStore())->execute();
+
+        self::assertTrue($overview->stale);
+        self::assertNull($overview->lastProbeAt);
+    }
+
+    public function testAnEmptyFleetIsNeverStale(): void
+    {
+        $overview = new GetMonitoringOverview(
+            new InMemoryProjectRepository(),
+            new InMemoryHealthSnapshotStore(),
+            new InMemoryMetricStore(),
+        );
+
+        self::assertFalse($overview->execute()->stale);
+    }
+
+    public function testTheWarningCanBeTurnedOff(): void
+    {
+        $snapshots = new InMemoryHealthSnapshotStore();
+        $snapshots->record($this->snapshotFrom('-30 days'));
+
+        $overview = new GetMonitoringOverview(
+            $this->projects(),
+            $snapshots,
+            new InMemoryMetricStore(),
+            staleAfterMinutes: 0,
+        );
+
+        self::assertFalse($overview->execute()->stale);
+    }
+
+    private function overviewOver(InMemoryHealthSnapshotStore $snapshots): GetMonitoringOverview
+    {
+        return new GetMonitoringOverview($this->projects(), $snapshots, new InMemoryMetricStore());
+    }
+
+    private function projects(): InMemoryProjectRepository
+    {
+        $projects = new InMemoryProjectRepository();
+        $projects->save(new Project(
+            GameId::fromString('loop9'),
+            'Loop 9',
+            'https://loop9-backend.onrender.com/healthz',
+            'https://loop9-backend.onrender.com/readyz',
+            IngestToken::hash('dev-loop9-ingest-token'),
+        ));
+
+        return $projects;
+    }
+
+    private function snapshotFrom(string $ago): HealthSnapshot
+    {
+        return new HealthSnapshot(
+            GameId::fromString('loop9'),
+            HealthEndpoint::Health,
+            HealthStatus::Ok,
+            200,
+            18,
+            new \DateTimeImmutable($ago),
+        );
     }
 }

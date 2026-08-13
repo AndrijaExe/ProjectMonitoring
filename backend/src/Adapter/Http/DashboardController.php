@@ -49,12 +49,7 @@ final class DashboardController
         }
         $this->requireAdmin($request);
 
-        return new JsonResponse([
-            'projects' => array_map(
-                static fn ($card): array => $card->toArray(),
-                $this->overview->execute()->projects,
-            ),
-        ]);
+        return new JsonResponse($this->overview->execute()->toArray());
     }
 
     #[Route('/api/v1/projects/{gameId}', name: 'project_detail', methods: ['GET', 'OPTIONS'])]

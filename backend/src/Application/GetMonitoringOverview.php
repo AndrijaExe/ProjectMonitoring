@@ -13,6 +13,7 @@ use App\Model\HealthSnapshotStore;
 use App\Model\MetricStore;
 use App\Model\Project;
 use App\Model\ProjectRepository;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 final class GetMonitoringOverview
 {
@@ -20,19 +21,56 @@ final class GetMonitoringOverview
         private readonly ProjectRepository $projects,
         private readonly HealthSnapshotStore $healthSnapshots,
         private readonly MetricStore $metrics,
+        #[Autowire('%env(int:POLL_MAX_AGE_MINUTES)%')]
+        private readonly int $staleAfterMinutes = 120,
     ) {
     }
 
     public function execute(): MonitoringOverview
     {
-        $since = new \DateTimeImmutable('-24 hours');
+        $now = new \DateTimeImmutable();
+        $since = $now->modify('-24 hours');
         $cards = [];
 
         foreach ($this->projects->all() as $project) {
             $cards[] = $this->cardFor($project, $since);
         }
 
-        return new MonitoringOverview($cards);
+        $newest = $this->newestProbe($cards);
+
+        return new MonitoringOverview(
+            projects: $cards,
+            lastProbeAt: $newest?->format(\DateTimeInterface::ATOM),
+            // A registered project with no recent probe counts as stale, including one never
+            // probed at all: nobody is watching it either way, and that is the thing to say.
+            stale: $cards !== [] && $this->staleAfterMinutes > 0 && (
+                $newest === null || $newest < $now->modify(sprintf('-%d minutes', $this->staleAfterMinutes))
+            ),
+            staleAfterMinutes: $this->staleAfterMinutes,
+        );
+    }
+
+    /**
+     * @param list<ProjectCard> $cards
+     */
+    private function newestProbe(array $cards): ?\DateTimeImmutable
+    {
+        $newest = null;
+
+        foreach ($cards as $card) {
+            foreach ([$card->healthCheckedAt, $card->readyCheckedAt] as $checkedAt) {
+                if ($checkedAt === null) {
+                    continue;
+                }
+
+                $at = new \DateTimeImmutable($checkedAt);
+                if ($newest === null || $at > $newest) {
+                    $newest = $at;
+                }
+            }
+        }
+
+        return $newest;
     }
 
     public function cardFor(Project $project, ?\DateTimeImmutable $since = null): ProjectCard

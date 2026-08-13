@@ -54,6 +54,11 @@ export type ProjectDetail = {
 
 export type OverviewResponse = {
   projects: ProjectCard[]
+  /** Newest probe across every project, or null when nothing has been probed yet. */
+  last_probe_at: string | null
+  /** True when that probe is older than the window below, which means nobody is watching. */
+  stale: boolean
+  stale_after_minutes: number
 }
 
 export type LogLine = {

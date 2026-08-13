@@ -40,6 +40,10 @@ services:
         sync: false
       - key: PROBE_TIMEOUT_SECONDS
         value: '20'
+      # The poll runs hourly from GitHub Actions, so two hours without a probe means the
+      # schedule stopped rather than that a run was slow. The console says so on the board.
+      - key: POLL_MAX_AGE_MINUTES
+        value: '120'
       # Optional. A Render API key turns on the logs panel in the console. Leave it unset
       # and the panel simply says so. The key is read server-side only and never reaches
       # the browser, which matters because it authorises everything the dashboard can do.

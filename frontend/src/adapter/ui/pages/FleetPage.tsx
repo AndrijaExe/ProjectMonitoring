@@ -48,6 +48,16 @@ export function FleetPage() {
         <p className={alertState.data.sent ? 'empty' : 'alert'}>{alertState.data.note}</p>
       ) : null}
       {alertState.isError ? <p className="alert">The API refused the test alert.</p> : null}
+      {data?.stale ? (
+        // The statuses below are still drawn, because the last known state is worth seeing.
+        // What they are not is current, and a board that hides that lies by staying quiet.
+        <p className="alert">
+          {data.last_probe_at == null
+            ? 'Nothing has been probed yet. The hourly poll has not reached the API, so every status below is unknown rather than good.'
+            : `No probe in the last ${Math.round(data.stale_after_minutes / 60)}h (newest ${formatCheckedAt(data.last_probe_at)}). The scheduled poll has stopped, so the statuses below are history, not news.`}{' '}
+          Check the Poll health workflow in GitHub Actions.
+        </p>
+      ) : null}
       {isLoading ? <p className="empty">Reading the board…</p> : null}
       {isError ? (
         <p className="alert">
