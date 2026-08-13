@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Unit\Application;
 
 use App\Application\AnnounceHealthChange;
+use App\Application\AnnounceMetricAlarms;
 use App\Application\CollectGameMetrics;
 use App\Application\GetMonitoringOverview;
 use App\Application\RecordHealthSnapshot;
@@ -18,6 +19,7 @@ use App\Model\Project;
 use App\Tests\Support\FakeAlertChannel;
 use App\Tests\Support\FakeGameMetricSource;
 use App\Tests\Support\FakeHealthProbe;
+use App\Tests\Support\InMemoryAlarmStateStore;
 use App\Tests\Support\InMemoryHealthSnapshotStore;
 use App\Tests\Support\InMemoryMetricStore;
 use App\Tests\Support\InMemoryProjectRepository;
@@ -42,7 +44,18 @@ final class MonitoringOverviewTest extends TestCase
         $probe->willReturn('https://loop9-backend.onrender.com/readyz', new ProbeResult(HealthStatus::Ready, 200, 22));
 
         $announce = new AnnounceHealthChange($snapshots, new FakeAlertChannel(configured: false), new NullLogger());
-        $collect = new CollectGameMetrics(new FakeGameMetricSource(), new InMemoryMetricStore(), new NullLogger());
+        $metrics = new InMemoryMetricStore();
+        $collect = new CollectGameMetrics(
+            new FakeGameMetricSource(),
+            $metrics,
+            new NullLogger(),
+            new AnnounceMetricAlarms(
+                $metrics,
+                new InMemoryAlarmStateStore(),
+                new FakeAlertChannel(configured: false),
+                new NullLogger(),
+            ),
+        );
         $recorded = (new RecordHealthSnapshot($projects, $probe, $snapshots, $announce, $collect))->forGameId('loop9');
         self::assertCount(2, $recorded);
         self::assertSame(HealthEndpoint::Health, $recorded[0]->endpoint);

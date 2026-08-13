@@ -58,6 +58,10 @@ services:
         sync: false
       - key: ALERT_EMAIL_FROM
         value: onboarding@resend.dev
+      # Ceilings for a game's own counters, as "name=limit" pairs per hour. Only the counters
+      # named here are watched; the other metric alarms fire on a change and need no number.
+      - key: ALERT_RATE_PER_HOUR
+        value: api.errors=20,ai.failed=10,safety.unavailable=10
       # Optional. Where Loop 9 publishes its own counters, and the secret for reading them
       # as "loop9=<token>". The token must match METRICS_TOKEN on the game's service.
       # Unset means the console shows probes only, which is what it did before.

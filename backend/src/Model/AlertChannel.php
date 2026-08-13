@@ -11,5 +11,5 @@ interface AlertChannel
     /**
      * @throws \RuntimeException when the alert could not be handed over
      */
-    public function send(Alert $alert): void;
+    public function send(Notification $alert): void;
 }

@@ -25,6 +25,7 @@ final class CollectGameMetrics
         private readonly GameMetricSource $source,
         private readonly MetricStore $metrics,
         private readonly LoggerInterface $logger,
+        private readonly AnnounceMetricAlarms $alarms,
     ) {
     }
 
@@ -55,6 +56,10 @@ final class CollectGameMetrics
             ]);
         }
 
+        // Read before writing: once this reading lands, the previous level is no longer the
+        // latest one, and "players fell to zero" needs both sides of that change.
+        $previousGauges = $this->metrics->latestGauges($project->gameId, $now->modify('-24 hours'));
+
         $samples = [];
 
         // Gauges first, because the batch below is capped: a level dropped from a reading has no
@@ -67,21 +72,27 @@ final class CollectGameMetrics
             $samples[] = new MetricSample($project->gameId, $name, $value, ['kind' => 'counter'], $now);
         }
 
+        $stored = 0;
+
         if ($samples === []) {
             // Answered, but with nothing in it. Without this line the console cannot tell a
             // game that has counted nothing from a reading that never happened.
             $this->logger->info('Game published no counters yet.', [
                 'game_id' => $project->gameId->value,
             ]);
-
-            return 0;
+        } else {
+            // A game publishing more series than a batch holds gets the first of them rather
+            // than a rejected reading. Losing the tail beats losing everything.
+            $samples = array_slice($samples, 0, MetricBatch::MAX_SAMPLES);
+            $this->metrics->recordBatch(new MetricBatch($samples));
+            $stored = count($samples);
         }
 
-        // A game publishing more series than a batch holds gets the first of them rather than
-        // a rejected reading. Losing the tail beats losing everything.
-        $samples = array_slice($samples, 0, MetricBatch::MAX_SAMPLES);
-        $this->metrics->recordBatch(new MetricBatch($samples));
+        // Always, and after the write. A reading with nothing in it is the exact shape of a
+        // game whose counters live in memory, which is the thing most worth saying out loud;
+        // and a rate has to be measured over a window that includes the reading just taken.
+        $this->alarms->forReading($project, $reading, $previousGauges, $now);
 
-        return count($samples);
+        return $stored;
     }
 }

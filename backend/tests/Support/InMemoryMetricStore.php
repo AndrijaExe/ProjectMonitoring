@@ -28,9 +28,20 @@ final class InMemoryMetricStore implements MetricStore
 
     public function totalsSince(GameId $gameId, \DateTimeImmutable $since): array
     {
+        return $this->totalsBetween($gameId, $since, null);
+    }
+
+    public function totalsBetween(GameId $gameId, \DateTimeImmutable $from, ?\DateTimeImmutable $until): array
+    {
+        $since = $from;
+
         /** @var array<string, list<MetricSample>> $bySeries */
         $bySeries = [];
         foreach ($this->since($gameId, $since) as $sample) {
+            if ($until !== null && $sample->recordedAt >= $until) {
+                continue;
+            }
+
             $bySeries[$sample->name][] = $sample;
         }
 

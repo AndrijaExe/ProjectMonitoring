@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace App\Tests\Support;
 
-use App\Model\Alert;
 use App\Model\AlertChannel;
+use App\Model\Notification;
 
 final class FakeAlertChannel implements AlertChannel
 {
     /**
-     * @var list<Alert>
+     * @var list<Notification>
      */
     public array $sent = [];
 
@@ -30,7 +30,7 @@ final class FakeAlertChannel implements AlertChannel
         return $this->configured;
     }
 
-    public function send(Alert $alert): void
+    public function send(Notification $alert): void
     {
         if ($this->failure !== null) {
             throw new \RuntimeException($this->failure);

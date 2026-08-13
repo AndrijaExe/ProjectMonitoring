@@ -4,14 +4,18 @@ declare(strict_types=1);
 
 namespace App\Tests\Unit\Application;
 
+use App\Application\AnnounceMetricAlarms;
 use App\Application\CollectGameMetrics;
 use App\Model\GameId;
 use App\Model\IngestToken;
 use App\Model\Project;
 use App\Tests\Support\CollectingLogger;
+use App\Tests\Support\FakeAlertChannel;
 use App\Tests\Support\FakeGameMetricSource;
+use App\Tests\Support\InMemoryAlarmStateStore;
 use App\Tests\Support\InMemoryMetricStore;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
 final class CollectGameMetricsTest extends TestCase
@@ -104,7 +108,7 @@ final class CollectGameMetricsTest extends TestCase
         $source = new FakeGameMetricSource();
         $source->willReturn([], []);
 
-        $collected = (new CollectGameMetrics($source, new InMemoryMetricStore(), $logger))
+        $collected = $this->collector($source, new InMemoryMetricStore(), $logger)
             ->forProject($this->project(), new \DateTimeImmutable());
 
         // Otherwise a game counting nothing looks exactly like a reading that never happened.
@@ -118,7 +122,7 @@ final class CollectGameMetricsTest extends TestCase
         $source = new FakeGameMetricSource();
         $source->willReturn(['chat.messages' => 3.0], [], 'memory');
 
-        (new CollectGameMetrics($source, new InMemoryMetricStore(), $logger))
+        $this->collector($source, new InMemoryMetricStore(), $logger)
             ->forProject($this->project(), new \DateTimeImmutable());
 
         self::assertContains(
@@ -127,9 +131,23 @@ final class CollectGameMetricsTest extends TestCase
         );
     }
 
-    private function collector(FakeGameMetricSource $source, InMemoryMetricStore $store): CollectGameMetrics
-    {
-        return new CollectGameMetrics($source, $store, new NullLogger());
+    private function collector(
+        FakeGameMetricSource $source,
+        InMemoryMetricStore $store,
+        ?LoggerInterface $logger = null,
+    ): CollectGameMetrics {
+        $logger ??= new NullLogger();
+
+        // Alarms are exercised in their own test; here the channel is off, which is also what a
+        // deployment without RESEND_API_KEY looks like.
+        $alarms = new AnnounceMetricAlarms(
+            $store,
+            new InMemoryAlarmStateStore(),
+            new FakeAlertChannel(configured: false),
+            $logger,
+        );
+
+        return new CollectGameMetrics($source, $store, $logger, $alarms);
     }
 
     private function project(?string $metricsUrl = 'https://loop9-backend.onrender.com/metrics'): Project

@@ -51,10 +51,17 @@ final class PdoMetricStore implements MetricStore
 
     public function totalsSince(GameId $gameId, \DateTimeImmutable $since): array
     {
+        return $this->totalsBetween($gameId, $since, null);
+    }
+
+    public function totalsBetween(GameId $gameId, \DateTimeImmutable $from, ?\DateTimeImmutable $until): array
+    {
+        $upperBound = $until === null ? '' : 'AND recorded_at < :until';
+
         // Two kinds of series share this table. A pushed sample is an event with a value, so
         // the window total is their sum. A scraped counter is a lifetime reading, so the window
         // total is how much it grew — summing those would add yesterday to itself all day.
-        $statement = $this->connection->pdo()->prepare(<<<'SQL'
+        $statement = $this->connection->pdo()->prepare(<<<SQL
             WITH windowed AS (
                 SELECT
                     name,
@@ -65,6 +72,7 @@ final class PdoMetricStore implements MetricStore
                 FROM metric_samples
                 WHERE game_id = :game_id
                   AND recorded_at >= :since
+                  {$upperBound}
                   AND COALESCE(tags ->> 'kind', '') <> 'gauge'
                 GROUP BY name
             ),
@@ -79,10 +87,17 @@ final class PdoMetricStore implements MetricStore
             LEFT JOIN before b ON b.name = w.name
             ORDER BY w.name ASC
             SQL);
-        $statement->execute([
+
+        $parameters = [
             'game_id' => $gameId->value,
-            'since' => $since->format(\DateTimeInterface::ATOM),
-        ]);
+            'since' => $from->format(\DateTimeInterface::ATOM),
+        ];
+
+        if ($until !== null) {
+            $parameters['until'] = $until->format(\DateTimeInterface::ATOM);
+        }
+
+        $statement->execute($parameters);
 
         $totals = [];
         foreach ($statement->fetchAll() as $row) {

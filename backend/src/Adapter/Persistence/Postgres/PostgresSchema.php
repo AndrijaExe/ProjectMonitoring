@@ -49,6 +49,16 @@ final class PostgresSchema
         CREATE INDEX IF NOT EXISTS metric_samples_window
             ON metric_samples (game_id, recorded_at DESC)
         SQL,
+        // One row per raised alarm. A rate or a level is simply true again on the next poll,
+        // so without this the same warning would be mailed every hour.
+        <<<'SQL'
+        CREATE TABLE IF NOT EXISTS metric_alarms (
+            game_id TEXT NOT NULL REFERENCES projects (game_id) ON DELETE CASCADE,
+            alarm_key TEXT NOT NULL,
+            opened_at TIMESTAMPTZ NOT NULL,
+            PRIMARY KEY (game_id, alarm_key)
+        )
+        SQL,
     ];
 
     public function __construct(private readonly PostgresConnection $connection)
@@ -65,6 +75,6 @@ final class PostgresSchema
 
     public function truncate(): void
     {
-        $this->connection->pdo()->exec('TRUNCATE projects, health_snapshots, metric_samples RESTART IDENTITY CASCADE');
+        $this->connection->pdo()->exec('TRUNCATE projects, health_snapshots, metric_samples, metric_alarms RESTART IDENTITY CASCADE');
     }
 }

@@ -193,6 +193,36 @@ Press **Test alert** on the fleet page once after setting this up. It sends a ma
 is the only way to learn that the setup works on a day when nothing is broken. Free instances
 have no shell, so this is also the only way.
 
+### Alarms from the game's own numbers
+
+A service can answer every probe correctly while failing at its job: every AI call falling back
+to a canned reply, a whole day passing with nobody playing, counters silently reverting to
+memory. Once game counters are wired (section 7), four more alarms use them. Three need no
+configuration because they fire on a change rather than a state:
+
+| Alarm | Fires when | Why it cannot spam you |
+|---|---|---|
+| `quiet` | Nothing counted for 24h, after a day that did count | A game that never counted anything is unreleased, not quiet |
+| `players.gone` | `players.online` falls from above zero to zero | Zero to zero is a Tuesday, not an event |
+| `storage.memory` | The game reports it is counting in memory | It is a one-off condition, mailed once until fixed |
+| `rate:<counter>` | A counter grows past its hourly ceiling | Only the counters you name below are watched |
+
+The fourth needs a number, because only you know what "too many" means for your game. On
+`monitoring-api` > Environment set `ALERT_RATE_PER_HOUR` to comma separated `name=limit` pairs:
+
+```
+api.errors=20,ai.failed=10,safety.unavailable=10
+```
+
+Loop 9 publishes `chat.messages`, `chat.denied`, `api.errors`, `ai.fallback`, `ai.failed`,
+`safety.blocked`, `safety.unavailable`, `auth.issued`, `auth.rejected` and `run.ended`, so any
+of those can be given a ceiling. A typo is ignored rather than fatal: a bad pair is dropped and
+the poll still records health. Leave the variable empty and no rate alarm exists.
+
+Each alarm is mailed once when it opens and once when it clears, the same as a probe alert, and
+the state lives in the `metric_alarms` table. An alarm whose mail could not be delivered is not
+recorded as raised, so it is retried on the next poll rather than lost.
+
 ## 7. Game counters (optional)
 
 A probe says the web server answered. It says nothing about whether players are getting replies,

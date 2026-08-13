@@ -58,6 +58,7 @@ flowchart TB
 - Delete a project's probe history from the console
 - Read a game's own counters each time a poll finds it up
 - Say out loud when the probes themselves have stopped arriving
+- Mail the operator when a game's own counters misbehave, not only when it stops answering
 
 Management controls (kill-switch, provider routing, Unreal remote) are out of scope.
 
@@ -104,6 +105,28 @@ them when it woke up.
 
 A channel that throws is logged and swallowed. The snapshot is the record that matters, and a
 mail provider having a bad afternoon must not turn a poll into a failure.
+
+### Alarms from the game's numbers
+
+`AnnounceMetricAlarms` is the second sender, and it exists because uptime is not the same thing
+as working. A service can answer every probe while every AI call falls back to a canned reply,
+while a whole day passes with nobody playing, or while its counters quietly revert to memory and
+report zeros forever. Probes are blind to all three.
+
+Four alarms survived the noise test, and the test was always the same question: would this ring
+on a normal day? Three of them compare two states rather than examining one, which is what makes
+them safe on an unreleased game. `quiet` needs a day that counted followed by a day that did
+not, so a game nobody has played yet says nothing. `players.gone` needs a fall from above zero,
+so a permanent zero is silent. `storage.memory` is a real one-off condition. Only `rate:<name>`
+takes a threshold, from `ALERT_RATE_PER_HOUR`, because what counts as too many errors an hour is
+a property of the game and not of the monitor.
+
+Health alerts can work out "have I already said this" from the probe history, because a probe
+writes a row every time. A rate or a level has no such trail — the condition is simply true again
+an hour later — so `AlarmStateStore` remembers which keys are raised. State changes only after
+the mail is away: recording an alarm that was never delivered would silence it permanently,
+which is the one outcome worse than a duplicate. Evaluation runs only when a poll found the game
+up, so a down target produces one alert about being down rather than a second about its numbers.
 
 ### The one alarm this design cannot send
 

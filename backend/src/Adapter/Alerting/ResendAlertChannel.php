@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Adapter\Alerting;
 
-use App\Model\Alert;
 use App\Model\AlertChannel;
+use App\Model\Notification;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface as HttpExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
@@ -41,7 +41,7 @@ final class ResendAlertChannel implements AlertChannel
         return trim($this->apiKey) !== '' && trim($this->to) !== '';
     }
 
-    public function send(Alert $alert): void
+    public function send(Notification $alert): void
     {
         if (!$this->isConfigured()) {
             return;
@@ -71,7 +71,7 @@ final class ResendAlertChannel implements AlertChannel
         }
     }
 
-    private function text(Alert $alert): string
+    private function text(Notification $alert): string
     {
         $body = $alert->body();
 

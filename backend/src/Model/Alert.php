@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Model;
 
-final readonly class Alert
+final readonly class Alert implements Notification
 {
     public function __construct(
         public Project $project,

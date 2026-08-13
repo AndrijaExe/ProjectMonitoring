@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Integration;
 
+use App\Adapter\Persistence\Postgres\PdoAlarmStateStore;
 use App\Adapter\Persistence\Postgres\PdoHealthSnapshotStore;
 use App\Adapter\Persistence\Postgres\PdoMetricStore;
 use App\Adapter\Persistence\Postgres\PdoProjectRepository;
@@ -169,6 +170,47 @@ final class PostgresStoreTest extends TestCase
             ['chat.messages' => 7.0],
             $store->totalsSince($this->loop9, $now->modify('-24 hours')),
         );
+    }
+
+    public function testAClosedWindowSeesOnlyItsOwnPeriod(): void
+    {
+        $store = new PdoMetricStore(TestDatabase::connection());
+        $now = new \DateTimeImmutable();
+        $counter = ['kind' => 'counter'];
+
+        $store->recordBatch(new MetricBatch([
+            new MetricSample($this->loop9, 'chat.messages', 100.0, $counter, $now->modify('-40 hours')),
+            new MetricSample($this->loop9, 'chat.messages', 150.0, $counter, $now->modify('-30 hours')),
+            new MetricSample($this->loop9, 'chat.messages', 400.0, $counter, $now->modify('-1 hour')),
+        ]));
+
+        // Yesterday saw 50 and stopped. Asking about yesterday must not be answered with the
+        // 250 that arrived today, which is the comparison the quiet alarm rests on.
+        self::assertSame(
+            ['chat.messages' => 50.0],
+            $store->totalsBetween($this->loop9, $now->modify('-48 hours'), $now->modify('-24 hours')),
+        );
+        self::assertSame(
+            ['chat.messages' => 250.0],
+            $store->totalsBetween($this->loop9, $now->modify('-24 hours'), null),
+        );
+    }
+
+    public function testAlarmsAreRememberedOncePerKeyAndCanBeClosed(): void
+    {
+        $alarms = new PdoAlarmStateStore(TestDatabase::connection());
+        $now = new \DateTimeImmutable();
+
+        $alarms->open($this->loop9, 'rate:ai.fallback', $now);
+        // A second poll finding the same condition must not multiply the row, or the operator
+        // would be mailed again the moment it clears.
+        $alarms->open($this->loop9, 'rate:ai.fallback', $now->modify('+1 hour'));
+        $alarms->open($this->loop9, 'storage.memory', $now);
+
+        self::assertSame(['rate:ai.fallback', 'storage.memory'], $alarms->openKeys($this->loop9));
+
+        $alarms->close($this->loop9, 'rate:ai.fallback');
+        self::assertSame(['storage.memory'], $alarms->openKeys($this->loop9));
     }
 
     public function testAGaugeReportsItsNewestValueAndStaysOutOfTheTotals(): void
