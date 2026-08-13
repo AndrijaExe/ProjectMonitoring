@@ -13,7 +13,30 @@ final readonly class Alert
         public ?int $outageSeconds = null,
         /** True when the outage began before the history we kept, so the duration is a floor. */
         public bool $outageIsLowerBound = false,
+        public bool $isDrill = false,
     ) {
+    }
+
+    /**
+     * A deliberately fake alert, sent through the real path. An alerting setup nobody has
+     * ever seen deliver is a guess, and the day it matters is the wrong day to find out.
+     */
+    public static function drill(Project $project, \DateTimeImmutable $now = new \DateTimeImmutable()): self
+    {
+        return new self(
+            $project,
+            new HealthSnapshot(
+                $project->gameId,
+                HealthEndpoint::Health,
+                HealthStatus::Down,
+                0,
+                0,
+                $now,
+                'Nothing is wrong. Somebody pressed the test button in the console.',
+            ),
+            HealthStatus::Ok,
+            isDrill: true,
+        );
     }
 
     public function isRecovery(): bool
@@ -24,7 +47,8 @@ final readonly class Alert
     public function subject(): string
     {
         return sprintf(
-            '%s %s is %s',
+            '%s%s %s is %s',
+            $this->isDrill ? '[test] ' : '',
             $this->project->displayName,
             $this->snapshot->endpoint->value,
             $this->snapshot->status->value,

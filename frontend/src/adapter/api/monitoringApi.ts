@@ -78,6 +78,12 @@ export const monitoringApi = createApi({
         return `/api/v1/projects/${gameId}/logs${search === '' ? '' : `?${search}`}`
       },
     }),
+    sendTestAlert: builder.mutation<{ sent: boolean; note: string }, void>({
+      query: () => ({
+        url: '/api/v1/alerts/test',
+        method: 'POST',
+      }),
+    }),
     pollAll: builder.mutation<{ polled: number }, void>({
       query: () => ({
         url: '/api/v1/poll',
@@ -103,6 +109,7 @@ export const {
   useGetOverviewQuery,
   useGetProjectQuery,
   useGetProjectLogsQuery,
+  useSendTestAlertMutation,
   usePollAllMutation,
   usePollProjectMutation,
 } = monitoringApi

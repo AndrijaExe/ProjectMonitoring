@@ -153,6 +153,11 @@ What triggers a message:
 Alert delivery never fails a poll. If Resend is unreachable the snapshot is still recorded and
 a warning goes to the service log.
 
+Press **Test alert** on the fleet page once after setting this up. It sends a mail marked
+`[test]` through the same code path a real alarm uses and reports back what Resend said, which
+is the only way to learn that the setup works on a day when nothing is broken. Free instances
+have no shell, so this is also the only way.
+
 ## Free tier limits worth knowing
 
 - The API sleeps after 15 minutes without traffic and takes close to a minute to wake. The

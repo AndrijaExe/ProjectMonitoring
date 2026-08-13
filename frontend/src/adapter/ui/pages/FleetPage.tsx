@@ -1,6 +1,10 @@
 import { Link } from 'react-router-dom'
 import { displayStatus } from '../../../model/monitoring'
-import { useGetOverviewQuery, usePollAllMutation } from '../../api/monitoringApi'
+import {
+  useGetOverviewQuery,
+  usePollAllMutation,
+  useSendTestAlertMutation,
+} from '../../api/monitoringApi'
 import { StatusChip } from '../components/StatusChip'
 import { Shell } from '../components/Shell'
 import { formatCheckedAt } from '../formatTime'
@@ -10,6 +14,7 @@ export function FleetPage() {
     pollingInterval: 30_000,
   })
   const [pollAll, pollState] = usePollAllMutation()
+  const [sendTestAlert, alertState] = useSendTestAlertMutation()
 
   return (
     <Shell
@@ -17,11 +22,25 @@ export function FleetPage() {
       title="What is up right now"
       lede="Health and ready probes for every registered game. Loop 9 is seeded; the next title is another project card, not a rewrite."
       action={
-        <button type="button" disabled={pollState.isLoading} onClick={() => void pollAll()}>
-          {pollState.isLoading ? 'Updating…' : 'Update status'}
-        </button>
+        <div className="hero-actions">
+          <button
+            className="ghost"
+            type="button"
+            disabled={alertState.isLoading}
+            onClick={() => void sendTestAlert()}
+          >
+            {alertState.isLoading ? 'Sending…' : 'Test alert'}
+          </button>
+          <button type="button" disabled={pollState.isLoading} onClick={() => void pollAll()}>
+            {pollState.isLoading ? 'Updating…' : 'Update status'}
+          </button>
+        </div>
       }
     >
+      {alertState.data != null ? (
+        <p className={alertState.data.sent ? 'empty' : 'alert'}>{alertState.data.note}</p>
+      ) : null}
+      {alertState.isError ? <p className="alert">The API refused the test alert.</p> : null}
       {isLoading ? <p className="empty">Reading the board…</p> : null}
       {isError ? (
         <p className="alert">
