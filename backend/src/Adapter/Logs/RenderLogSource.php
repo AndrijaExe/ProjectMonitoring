@@ -47,8 +47,39 @@ final class RenderLogSource implements LogSource
             throw new LogsUnavailable('RENDER_API_KEY is not set.');
         }
 
-        $service = $this->service($project);
+        return $this->lines($this->service($project), $filter);
+    }
 
+    public function recentForService(string $serviceId, LogFilter $filter): array
+    {
+        if (!$this->isConfigured()) {
+            throw new LogsUnavailable('RENDER_API_KEY is not set.');
+        }
+
+        if (trim($serviceId) === '') {
+            throw new LogsUnavailable('No service id. RENDER_SERVICE_ID is only set when running on Render.');
+        }
+
+        /** @var array{id: string, ownerId: string} $service */
+        $service = $this->cache->get('render_owner_'.$serviceId, function (ItemInterface $item) use ($serviceId): array {
+            $item->expiresAfter(self::SERVICE_LOOKUP_TTL);
+
+            $payload = $this->get('/services/'.rawurlencode($serviceId), []);
+            $service = isset($payload['service']) && is_array($payload['service']) ? $payload['service'] : $payload;
+
+            return $this->identity($service);
+        });
+
+        return $this->lines($service, $filter);
+    }
+
+    /**
+     * @param array{id: string, ownerId: string} $service
+     *
+     * @return list<LogLine>
+     */
+    private function lines(array $service, LogFilter $filter): array
+    {
         $query = [
             'ownerId' => $service['ownerId'],
             'resource' => [$service['id']],
@@ -187,7 +218,8 @@ final class RenderLogSource implements LogSource
     private function get(string $path, array $query): array
     {
         try {
-            $response = $this->httpClient->request('GET', self::BASE_URL.$path.'?'.$this->queryString($query), [
+            $search = $this->queryString($query);
+            $response = $this->httpClient->request('GET', self::BASE_URL.$path.($search === '' ? '' : '?'.$search), [
                 'timeout' => 15,
                 'headers' => [
                     'Authorization' => 'Bearer '.$this->apiKey,

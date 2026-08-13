@@ -1,9 +1,13 @@
 import { useState, type FormEvent } from 'react'
-import { useGetProjectLogsQuery } from '../../api/monitoringApi'
+import { useGetProjectLogsQuery, useGetSystemLogsQuery } from '../../api/monitoringApi'
 import { formatCheckedAt } from '../formatTime'
+import { useSeeMore } from '../useSeeMore'
+import { SeeMore } from './SeeMore'
 
 type Props = {
-  gameId: string
+  title: string
+  /** Omitted for the monitor's own logs. */
+  gameId?: string
 }
 
 type Query = {
@@ -13,15 +17,22 @@ type Query = {
 
 const LEVELS = ['', 'error', 'warning', 'info'] as const
 
-export function LogPanel({ gameId }: Props) {
+export function LogPanel({ title, gameId }: Props) {
   const [draft, setDraft] = useState<Query>({ level: '', text: '' })
   // Applied separately from the draft so typing does not fire a request per keystroke.
   const [applied, setApplied] = useState<Query>({ level: '', text: '' })
 
-  const { data, isFetching, isError, refetch } = useGetProjectLogsQuery(
-    { gameId, level: applied.level, text: applied.text },
-    { skip: gameId === '' },
+  const project = useGetProjectLogsQuery(
+    { gameId: gameId ?? '', level: applied.level, text: applied.text },
+    { skip: gameId == null },
   )
+  const system = useGetSystemLogsQuery(
+    { level: applied.level, text: applied.text },
+    { skip: gameId != null },
+  )
+  const { data, isFetching, isError, refetch } = gameId != null ? project : system
+
+  const lines = useSeeMore(data?.lines ?? [])
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
@@ -31,7 +42,7 @@ export function LogPanel({ gameId }: Props) {
   return (
     <section className="logs">
       <div className="logs-head">
-        <h2>Logs</h2>
+        <h2>{title}</h2>
         <form className="logs-filters" onSubmit={submit}>
           <select
             aria-label="Log level"
@@ -66,16 +77,24 @@ export function LogPanel({ gameId }: Props) {
         <p className="empty">Nothing in the last 24 hours for this filter.</p>
       ) : null}
 
-      {data != null && data.lines.length > 0 ? (
-        <ol className="log-lines">
-          {data.lines.map((line, index) => (
-            <li key={`${line.at}-${index}`} data-level={line.level ?? 'none'}>
-              <span className="mono log-at">{formatCheckedAt(line.at)}</span>
-              {line.level != null ? <span className="log-level">{line.level}</span> : null}
-              <span className="log-message">{line.message}</span>
-            </li>
-          ))}
-        </ol>
+      {lines.visible.length > 0 ? (
+        <>
+          <ol className="log-lines">
+            {lines.visible.map((line, index) => (
+              <li key={`${line.at}-${index}`} data-level={line.level ?? 'none'}>
+                <span className="mono log-at">{formatCheckedAt(line.at)}</span>
+                {line.level != null ? <span className="log-level">{line.level}</span> : null}
+                <span className="log-message">{line.message}</span>
+              </li>
+            ))}
+          </ol>
+          <SeeMore
+            hidden={lines.hidden}
+            expanded={lines.expanded}
+            onMore={lines.showMore}
+            onLess={lines.showLess}
+          />
+        </>
       ) : null}
     </section>
   )

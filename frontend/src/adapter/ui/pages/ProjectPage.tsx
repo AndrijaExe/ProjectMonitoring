@@ -1,5 +1,11 @@
 import { Link, useParams } from 'react-router-dom'
-import { useGetProjectQuery, usePollProjectMutation } from '../../api/monitoringApi'
+import {
+  useClearHistoryMutation,
+  useGetProjectQuery,
+  usePollProjectMutation,
+} from '../../api/monitoringApi'
+import { SeeMore } from '../components/SeeMore'
+import { useSeeMore } from '../useSeeMore'
 import { LogPanel } from '../components/LogPanel'
 import { StatusChip } from '../components/StatusChip'
 import { Shell } from '../components/Shell'
@@ -14,6 +20,9 @@ export function ProjectPage() {
   })
   const [pollProject] = usePollProjectMutation()
   const status = useStatusUpdate(() => pollProject(gameId))
+  const [clearHistory, clearState] = useClearHistoryMutation()
+  const history = useSeeMore(data?.health_history ?? [])
+  const metrics = useSeeMore(data?.recent_metrics ?? [])
 
   if (isLoading) {
     return (
@@ -53,9 +62,29 @@ export function ProjectPage() {
       title={card.display_name}
       lede={`Health ${card.health.status ?? 'unseen'}${card.health.latency_ms != null ? ` in ${card.health.latency_ms}ms` : ''}. Ready ${card.ready.status ?? 'unseen'}${card.ready.latency_ms != null ? ` in ${card.ready.latency_ms}ms` : ''}.`}
       action={
-        <button type="button" disabled={status.busy} onClick={() => void status.update([card.health_url])}>
-          {status.label}
-        </button>
+        <div className="hero-actions">
+          <button
+            className="ghost"
+            type="button"
+            disabled={clearState.isLoading || data.health_history.length === 0}
+            onClick={() => {
+              // A destructive action deserves a question, and the count makes the
+              // consequence concrete rather than abstract.
+              if (window.confirm(`Delete ${data.health_history.length} stored probe rows for ${card.display_name}?`)) {
+                void clearHistory(card.game_id)
+              }
+            }}
+          >
+            {clearState.isLoading ? 'Clearing…' : 'Clear history'}
+          </button>
+          <button
+            type="button"
+            disabled={status.busy}
+            onClick={() => void status.update([card.health_url])}
+          >
+            {status.label}
+          </button>
+        </div>
       }
     >
       <div className="chips page-chips">
@@ -85,7 +114,7 @@ export function ProjectPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.health_history.map((row) => (
+                {history.visible.map((row) => (
                   <tr key={`${row.endpoint}-${row.checked_at}-${row.http_code}-${row.latency_ms}`}>
                     <td className="mono">{formatCheckedAt(row.checked_at)}</td>
                     <td>{row.endpoint}</td>
@@ -100,6 +129,12 @@ export function ProjectPage() {
               </tbody>
             </table>
           )}
+          <SeeMore
+            hidden={history.hidden}
+            expanded={history.expanded}
+            onMore={history.showMore}
+            onLess={history.showLess}
+          />
         </article>
         <article>
           <h2>Recent ingest</h2>
@@ -127,7 +162,7 @@ export function ProjectPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.recent_metrics.map((metric) => (
+                {metrics.visible.map((metric) => (
                   <tr key={`${metric.name}-${metric.recorded_at}-${metric.value}`}>
                     <td className="mono">{formatCheckedAt(metric.recorded_at)}</td>
                     <td>{metric.name}</td>
@@ -137,10 +172,16 @@ export function ProjectPage() {
               </tbody>
             </table>
           )}
+          <SeeMore
+            hidden={metrics.hidden}
+            expanded={metrics.expanded}
+            onMore={metrics.showMore}
+            onLess={metrics.showLess}
+          />
         </article>
       </section>
 
-      <LogPanel gameId={card.game_id} />
+      <LogPanel title="Logs" gameId={card.game_id} />
     </Shell>
   )
 }

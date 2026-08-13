@@ -46,4 +46,13 @@ final class FakeLogSource implements LogSource
 
         return $this->lines;
     }
+
+    public function recentForService(string $serviceId, LogFilter $filter): array
+    {
+        if ($this->failure !== null) {
+            throw $this->failure;
+        }
+
+        return $this->lines;
+    }
 }

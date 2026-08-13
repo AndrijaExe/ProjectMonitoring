@@ -19,6 +19,17 @@ final class InMemoryHealthSnapshotStore implements HealthSnapshotStore
         $this->snapshots[] = $snapshot;
     }
 
+    public function deleteFor(GameId $gameId): int
+    {
+        $before = count($this->snapshots);
+        $this->snapshots = array_values(array_filter(
+            $this->snapshots,
+            static fn (HealthSnapshot $snapshot): bool => $snapshot->gameId->value !== $gameId->value,
+        ));
+
+        return $before - count($this->snapshots);
+    }
+
     public function latest(GameId $gameId, HealthEndpoint $endpoint): ?HealthSnapshot
     {
         $match = null;

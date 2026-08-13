@@ -53,8 +53,9 @@ flowchart TB
 - Poll `/healthz` and `/readyz` on demand or via `bin/console app:poll-health`
 - Accept metric batches from game backends (`X-Ingest-Token`)
 - Show a fleet board plus a project detail page
-- Read the target's host logs beside its probe history
+- Read the target's host logs beside its probe history, and the monitor's own logs
 - Mail the operator when a target changes state
+- Delete a project's probe history from the console
 
 Management controls (kill-switch, provider routing, Unreal remote) are out of scope.
 
@@ -117,6 +118,22 @@ Everything that can go wrong here — no key, a rejected key, an unknown service
 unreachable — comes back as a note on an empty panel instead of an exception. The probe history
 on the same page is the part that matters, and it should not disappear because an optional
 integration is misconfigured.
+
+The fleet page reads the monitor's own logs through the same port. When the board looks wrong,
+the first question is whether the game is broken or the watcher is, and answering it should not
+mean opening the Render dashboard. Render injects `RENDER_SERVICE_ID` into every service, so the
+API finds itself without being configured; off Render the panel says so and stays empty.
+
+## Deleting history
+
+`ClearHealthHistory` removes every snapshot for one project. It is the only destructive action in
+the API, so it writes a warning to the service log before returning, and that log is what the
+fleet page now shows. A monitor that can quietly erase its own evidence is worse than no monitor.
+
+There is no audit table yet and no record of who pressed the button, because a single shared
+`ADMIN_TOKEN` cannot tell one operator from another. Naming an actor would be an invention. When
+control actions arrive and more than one person holds a credential, both problems get solved
+together rather than half-solved now.
 
 ## Auth
 

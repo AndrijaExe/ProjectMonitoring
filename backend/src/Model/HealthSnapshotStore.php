@@ -14,4 +14,9 @@ interface HealthSnapshotStore
      * @return list<HealthSnapshot>
      */
     public function recent(GameId $gameId, int $limit = 40): array;
+
+    /**
+     * @return int rows removed
+     */
+    public function deleteFor(GameId $gameId): int;
 }

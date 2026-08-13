@@ -5,6 +5,7 @@ import {
   usePollAllMutation,
   useSendTestAlertMutation,
 } from '../../api/monitoringApi'
+import { LogPanel } from '../components/LogPanel'
 import { StatusChip } from '../components/StatusChip'
 import { Shell } from '../components/Shell'
 import { formatCheckedAt } from '../formatTime'
@@ -87,6 +88,8 @@ export function FleetPage() {
           ))}
         </ul>
       ) : null}
+
+      <LogPanel title="Monitor logs" />
     </Shell>
   )
 }

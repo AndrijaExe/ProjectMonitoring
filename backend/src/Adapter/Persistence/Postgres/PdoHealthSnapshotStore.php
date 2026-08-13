@@ -66,6 +66,16 @@ final class PdoHealthSnapshotStore implements HealthSnapshotStore
         return array_map($this->hydrate(...), $statement->fetchAll());
     }
 
+    public function deleteFor(GameId $gameId): int
+    {
+        $statement = $this->connection->pdo()->prepare(
+            'DELETE FROM health_snapshots WHERE game_id = :game_id',
+        );
+        $statement->execute(['game_id' => $gameId->value]);
+
+        return $statement->rowCount();
+    }
+
     /**
      * @param array<string, mixed> $row
      */

@@ -19,4 +19,13 @@ interface LogSource
      * @throws LogsUnavailable when the upstream cannot be reached or refuses the query
      */
     public function recent(Project $project, LogFilter $filter): array;
+
+    /**
+     * Reads a host's own logs, for the monitor looking at itself.
+     *
+     * @return list<LogLine> newest first
+     *
+     * @throws LogsUnavailable
+     */
+    public function recentForService(string $serviceId, LogFilter $filter): array;
 }

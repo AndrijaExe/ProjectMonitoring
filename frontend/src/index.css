@@ -363,6 +363,17 @@ td {
   gap: 0.6rem;
 }
 
+.see-more {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.8rem;
+}
+
+.see-more button {
+  font-size: 0.78rem;
+  padding: 0.35rem 0.7rem;
+}
+
 .logs {
   margin-top: 2rem;
   border-top: 1px solid var(--line);
@@ -403,8 +414,6 @@ td {
   list-style: none;
   margin: 1rem 0 0;
   padding: 0.6rem;
-  max-height: 26rem;
-  overflow-y: auto;
   background: var(--ink-2);
   border: 1px solid var(--line);
   font-family: var(--mono);

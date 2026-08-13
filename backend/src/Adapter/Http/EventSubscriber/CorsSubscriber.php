@@ -53,7 +53,7 @@ final class CorsSubscriber implements EventSubscriberInterface
         if ($origin !== '' && $this->isAllowedOrigin($origin)) {
             $response->headers->set('Access-Control-Allow-Origin', $origin);
             $response->headers->set('Vary', 'Origin');
-            $response->headers->set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+                $response->headers->set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
             $response->headers->set(
                 'Access-Control-Allow-Headers',
                 'Content-Type, X-Admin-Token, X-Ingest-Token, X-Request-Id',

@@ -78,6 +78,27 @@ export const monitoringApi = createApi({
         return `/api/v1/projects/${gameId}/logs${search === '' ? '' : `?${search}`}`
       },
     }),
+    getSystemLogs: builder.query<ProjectLogs, Omit<LogQueryArgs, 'gameId'>>({
+      query: ({ level, text }) => {
+        const params = new URLSearchParams()
+        if (level) {
+          params.set('level', level)
+        }
+        if (text) {
+          params.set('text', text)
+        }
+        const search = params.toString()
+
+        return `/api/v1/system/logs${search === '' ? '' : `?${search}`}`
+      },
+    }),
+    clearHistory: builder.mutation<{ cleared: number }, string>({
+      query: (gameId) => ({
+        url: `/api/v1/projects/${gameId}/snapshots`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: (_result, _error, gameId) => ['Overview', { type: 'Project', id: gameId }],
+    }),
     sendTestAlert: builder.mutation<{ sent: boolean; note: string }, void>({
       query: () => ({
         url: '/api/v1/alerts/test',
@@ -109,6 +130,8 @@ export const {
   useGetOverviewQuery,
   useGetProjectQuery,
   useGetProjectLogsQuery,
+  useGetSystemLogsQuery,
+  useClearHistoryMutation,
   useSendTestAlertMutation,
   usePollAllMutation,
   usePollProjectMutation,

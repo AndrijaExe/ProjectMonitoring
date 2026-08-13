@@ -101,14 +101,17 @@ Two things that will eventually bite:
 ## 5. Logs in the console (optional)
 
 The project page can show the target's Render logs, so a red probe and the lines that explain
-it live on the same screen. Without a key the panel says so and nothing else breaks.
+it live on the same screen. The fleet page shows the monitoring API's own logs, for the times
+the suspect is the watcher rather than the game. Without a key both panels say so and nothing
+else breaks.
 
 1. Create a key at Account Settings > API Keys in the Render dashboard. It is shown once.
 2. Add it to `monitoring-api` > Environment as `RENDER_API_KEY`, then redeploy.
 
 Nothing else to configure: the API finds the service by the hostname already stored in the
-project's health URL, so any target on `*.onrender.com` in the same workspace works, including
-`monitoring-api` itself. The lookup result is cached for an hour.
+project's health URL, so any target on `*.onrender.com` in the same workspace works. For its own
+logs it uses `RENDER_SERVICE_ID`, which Render injects into every service. Both lookups are
+cached for an hour.
 
 Two limits are worth stating plainly:
 
