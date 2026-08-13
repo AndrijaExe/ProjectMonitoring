@@ -1,0 +1,151 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Tests\Unit\Adapter;
+
+use App\Adapter\Logs\RenderLogSource;
+use App\Model\GameId;
+use App\Model\IngestToken;
+use App\Model\LogFilter;
+use App\Model\LogsUnavailable;
+use App\Model\Project;
+use PHPUnit\Framework\TestCase;
+use Symfony\Component\Cache\Adapter\ArrayAdapter;
+use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\MockResponse;
+
+final class RenderLogSourceTest extends TestCase
+{
+    public function testWithoutAKeyItReportsItselfUnconfigured(): void
+    {
+        $source = new RenderLogSource(new MockHttpClient([]), new ArrayAdapter(), '');
+
+        self::assertFalse($source->isConfigured());
+
+        $this->expectException(LogsUnavailable::class);
+        $source->recent($this->project(), new LogFilter());
+    }
+
+    public function testItResolvesTheServiceFromTheHealthUrlAndMapsLines(): void
+    {
+        $requests = [];
+        $client = new MockHttpClient(function (string $method, string $url) use (&$requests): MockResponse {
+            $requests[] = $url;
+
+            if (str_contains($url, '/services')) {
+                return new MockResponse(json_encode([
+                    ['cursor' => 'abc', 'service' => ['id' => 'srv-123', 'ownerId' => 'tea-9', 'name' => 'loop9-backend']],
+                ]), ['response_headers' => ['content-type' => 'application/json']]);
+            }
+
+            return new MockResponse(json_encode([
+                'hasMore' => false,
+                'logs' => [
+                    [
+                        'id' => 'log-1',
+                        'message' => 'Chat request finished',
+                        'timestamp' => '2026-08-13T07:20:05.777035+00:00',
+                        'labels' => [
+                            ['name' => 'level', 'value' => 'info'],
+                            ['name' => 'type', 'value' => 'app'],
+                        ],
+                    ],
+                ],
+            ]), ['response_headers' => ['content-type' => 'application/json']]);
+        });
+
+        $source = new RenderLogSource($client, new ArrayAdapter(), 'rnd_key');
+        $lines = $source->recent($this->project(), new LogFilter(50, 'info', 'chat'));
+
+        self::assertCount(1, $lines);
+        self::assertSame('Chat request finished', $lines[0]->message);
+        self::assertSame('info', $lines[0]->level);
+        self::assertSame('app', $lines[0]->type);
+        self::assertSame('2026-08-13T07:20:05+00:00', $lines[0]->at->format(DATE_ATOM));
+
+        self::assertStringContainsString('name=loop9-backend', $requests[0]);
+        self::assertStringContainsString('ownerId=tea-9', $requests[1]);
+        // Repeated keys, not PHP's resource[0]= form, which Render ignores.
+        self::assertStringContainsString('resource=srv-123', $requests[1]);
+        self::assertStringContainsString('level=info', $requests[1]);
+        // Render matches log text with wildcards, so a bare term would find nothing.
+        self::assertStringContainsString('text=%2Achat%2A', $requests[1]);
+    }
+
+    public function testTheServiceLookupHappensOncePerName(): void
+    {
+        $lookups = 0;
+        $client = new MockHttpClient(function (string $method, string $url) use (&$lookups): MockResponse {
+            if (str_contains($url, '/services')) {
+                ++$lookups;
+
+                return new MockResponse(json_encode([
+                    ['service' => ['id' => 'srv-123', 'ownerId' => 'tea-9']],
+                ]));
+            }
+
+            return new MockResponse(json_encode(['logs' => []]));
+        });
+
+        $source = new RenderLogSource($client, new ArrayAdapter(), 'rnd_key');
+        $source->recent($this->project(), new LogFilter());
+        $source->recent($this->project(), new LogFilter());
+
+        self::assertSame(1, $lookups);
+    }
+
+    public function testARejectedKeySaysSoRatherThanLeakingTheStatusCode(): void
+    {
+        $client = new MockHttpClient(new MockResponse('{"message":"unauthorized"}', ['http_code' => 401]));
+        $source = new RenderLogSource($client, new ArrayAdapter(), 'wrong-key');
+
+        $this->expectException(LogsUnavailable::class);
+        $this->expectExceptionMessage('Render rejected the API key.');
+
+        $source->recent($this->project(), new LogFilter());
+    }
+
+    public function testATargetOutsideRenderIsRefusedBeforeAnyRequest(): void
+    {
+        $client = new MockHttpClient([]);
+        $source = new RenderLogSource($client, new ArrayAdapter(), 'rnd_key');
+
+        $this->expectException(LogsUnavailable::class);
+        $this->expectExceptionMessage('only wired for targets hosted on Render');
+
+        $source->recent($this->project('https://example.test/healthz'), new LogFilter());
+        self::assertSame(0, $client->getRequestsCount());
+    }
+
+    public function testAnUnknownServiceNameIsReported(): void
+    {
+        $client = new MockHttpClient(new MockResponse('[]'));
+        $source = new RenderLogSource($client, new ArrayAdapter(), 'rnd_key');
+
+        $this->expectException(LogsUnavailable::class);
+        $this->expectExceptionMessage('No Render service named "loop9-backend"');
+
+        $source->recent($this->project(), new LogFilter());
+    }
+
+    public function testTheFilterClampsHostileValues(): void
+    {
+        $filter = new LogFilter(9999, null, null, 999_999);
+
+        self::assertSame(LogFilter::MAX_LIMIT, $filter->limit);
+        self::assertSame(LogFilter::MAX_WINDOW_MINUTES, $filter->sinceMinutes);
+        self::assertSame(1, (new LogFilter(0))->limit);
+    }
+
+    private function project(string $healthUrl = 'https://loop9-backend.onrender.com/healthz'): Project
+    {
+        return new Project(
+            GameId::fromString('loop9'),
+            'Loop 9',
+            $healthUrl,
+            'https://loop9-backend.onrender.com/readyz',
+            IngestToken::hash('test-ingest-token-ok'),
+        );
+    }
+}

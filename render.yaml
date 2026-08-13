@@ -40,6 +40,11 @@ services:
         sync: false
       - key: PROBE_TIMEOUT_SECONDS
         value: '20'
+      # Optional. A Render API key turns on the logs panel in the console. Leave it unset
+      # and the panel simply says so. The key is read server-side only and never reaches
+      # the browser, which matters because it authorises everything the dashboard can do.
+      - key: RENDER_API_KEY
+        sync: false
 
   - type: web
     name: monitoring-console

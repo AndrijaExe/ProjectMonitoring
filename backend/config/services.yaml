@@ -24,3 +24,7 @@ services:
     App\Model\HealthProbe:
         alias: App\Adapter\Probe\HttpHealthProbe
         public: false
+
+    App\Model\LogSource:
+        alias: App\Adapter\Logs\RenderLogSource
+        public: false

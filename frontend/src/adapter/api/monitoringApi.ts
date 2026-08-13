@@ -5,7 +5,12 @@ import {
   type FetchArgs,
   type FetchBaseQueryError,
 } from '@reduxjs/toolkit/query/react'
-import type { OverviewResponse, ProjectDetail } from '../../model/monitoring'
+import type {
+  LogQueryArgs,
+  OverviewResponse,
+  ProjectDetail,
+  ProjectLogs,
+} from '../../model/monitoring'
 import { clearToken } from '../store/authSlice'
 
 type AuthRoot = {
@@ -59,6 +64,20 @@ export const monitoringApi = createApi({
       query: (gameId) => `/api/v1/projects/${gameId}`,
       providesTags: (_result, _error, gameId) => [{ type: 'Project', id: gameId }],
     }),
+    getProjectLogs: builder.query<ProjectLogs, LogQueryArgs>({
+      query: ({ gameId, level, text }) => {
+        const params = new URLSearchParams()
+        if (level) {
+          params.set('level', level)
+        }
+        if (text) {
+          params.set('text', text)
+        }
+        const search = params.toString()
+
+        return `/api/v1/projects/${gameId}/logs${search === '' ? '' : `?${search}`}`
+      },
+    }),
     pollAll: builder.mutation<{ polled: number }, void>({
       query: () => ({
         url: '/api/v1/poll',
@@ -83,6 +102,7 @@ export const {
   useLoginMutation,
   useGetOverviewQuery,
   useGetProjectQuery,
+  useGetProjectLogsQuery,
   usePollAllMutation,
   usePollProjectMutation,
 } = monitoringApi

@@ -1,0 +1,206 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Adapter\Logs;
+
+use App\Model\LogFilter;
+use App\Model\LogLine;
+use App\Model\LogSource;
+use App\Model\LogsUnavailable;
+use App\Model\Project;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
+use Symfony\Contracts\HttpClient\Exception\ExceptionInterface as HttpExceptionInterface;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
+
+/**
+ * Reads logs through Render's public API.
+ *
+ * The API key is never handed to the browser: the console asks this service, which asks
+ * Render. That matters because a Render key authorises everything the dashboard can do,
+ * so the blast radius has to stay limited to the queries implemented here.
+ */
+final class RenderLogSource implements LogSource
+{
+    private const BASE_URL = 'https://api.render.com/v1';
+    private const RENDER_HOST_SUFFIX = '.onrender.com';
+    private const SERVICE_LOOKUP_TTL = 3600;
+
+    public function __construct(
+        private readonly HttpClientInterface $httpClient,
+        private readonly CacheInterface $cache,
+        #[Autowire('%env(RENDER_API_KEY)%')]
+        private readonly string $apiKey = '',
+    ) {
+    }
+
+    public function isConfigured(): bool
+    {
+        return trim($this->apiKey) !== '';
+    }
+
+    public function recent(Project $project, LogFilter $filter): array
+    {
+        if (!$this->isConfigured()) {
+            throw new LogsUnavailable('RENDER_API_KEY is not set.');
+        }
+
+        $service = $this->service($project);
+
+        $query = [
+            'ownerId' => $service['ownerId'],
+            'resource' => [$service['id']],
+            'limit' => $filter->limit,
+            'direction' => 'backward',
+            'startTime' => $filter->since(new \DateTimeImmutable())->format(DATE_ATOM),
+        ];
+
+        if ($filter->level !== null && $filter->level !== '') {
+            $query['level'] = [$filter->level];
+        }
+
+        if ($filter->text !== null && $filter->text !== '') {
+            // Render matches log text with wildcards, so a bare term would match nothing.
+            $query['text'] = ['*'.$filter->text.'*'];
+        }
+
+        $payload = $this->get('/logs', $query);
+        $lines = [];
+
+        foreach ($payload['logs'] ?? [] as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+
+            $lines[] = $this->toLine($entry);
+        }
+
+        return $lines;
+    }
+
+    /**
+     * @return array{id: string, ownerId: string}
+     */
+    private function service(Project $project): array
+    {
+        $name = $this->serviceName($project->healthUrl);
+
+        /** @var array{id: string, ownerId: string} */
+        return $this->cache->get('render_service_'.$name, function (ItemInterface $item) use ($name): array {
+            $item->expiresAfter(self::SERVICE_LOOKUP_TTL);
+
+            $rows = $this->get('/services', ['name' => $name, 'limit' => 1]);
+            foreach ($rows as $row) {
+                // List endpoints wrap each item, but tolerate a bare object too.
+                $service = is_array($row) && isset($row['service']) && is_array($row['service'])
+                    ? $row['service']
+                    : $row;
+
+                if (is_array($service) && isset($service['id'], $service['ownerId'])) {
+                    return [
+                        'id' => (string) $service['id'],
+                        'ownerId' => (string) $service['ownerId'],
+                    ];
+                }
+            }
+
+            throw new LogsUnavailable(sprintf('No Render service named "%s" in this workspace.', $name));
+        });
+    }
+
+    private function serviceName(string $healthUrl): string
+    {
+        $host = (string) (parse_url($healthUrl, PHP_URL_HOST) ?? '');
+        if (!str_ends_with($host, self::RENDER_HOST_SUFFIX)) {
+            throw new LogsUnavailable('Logs are only wired for targets hosted on Render.');
+        }
+
+        return substr($host, 0, -strlen(self::RENDER_HOST_SUFFIX));
+    }
+
+    /**
+     * @param array<string, mixed> $query
+     *
+     * @return array<mixed>
+     */
+    private function get(string $path, array $query): array
+    {
+        try {
+            $response = $this->httpClient->request('GET', self::BASE_URL.$path.'?'.$this->queryString($query), [
+                'timeout' => 15,
+                'headers' => [
+                    'Authorization' => 'Bearer '.$this->apiKey,
+                    'Accept' => 'application/json',
+                ],
+            ]);
+
+            $status = $response->getStatusCode();
+            if ($status === 401 || $status === 403) {
+                throw new LogsUnavailable('Render rejected the API key.');
+            }
+
+            if ($status >= 400) {
+                throw new LogsUnavailable(sprintf('Render answered %d for %s.', $status, $path));
+            }
+
+            $decoded = json_decode($response->getContent(false), true);
+        } catch (HttpExceptionInterface $exception) {
+            throw new LogsUnavailable('Could not reach the Render API.', 0, $exception);
+        }
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * Repeats the key for list values (`resource=a&resource=b`). Render reads them that way,
+     * while PHP's own encoder would emit `resource[0]=a`, which it ignores.
+     *
+     * @param array<string, mixed> $query
+     */
+    private function queryString(array $query): string
+    {
+        $pairs = [];
+        foreach ($query as $key => $value) {
+            foreach (is_array($value) ? $value : [$value] as $single) {
+                $pairs[] = rawurlencode($key).'='.rawurlencode((string) $single);
+            }
+        }
+
+        return implode('&', $pairs);
+    }
+
+    /**
+     * @param array<string, mixed> $entry
+     */
+    private function toLine(array $entry): LogLine
+    {
+        $labels = [];
+        foreach ($entry['labels'] ?? [] as $label) {
+            if (is_array($label) && isset($label['name'], $label['value'])) {
+                $labels[(string) $label['name']] = (string) $label['value'];
+            }
+        }
+
+        return new LogLine(
+            $this->timestamp($entry['timestamp'] ?? null),
+            trim((string) ($entry['message'] ?? '')),
+            $labels['level'] ?? null,
+            $labels['type'] ?? null,
+        );
+    }
+
+    private function timestamp(mixed $raw): \DateTimeImmutable
+    {
+        if (is_string($raw) && $raw !== '') {
+            try {
+                return new \DateTimeImmutable($raw);
+            } catch (\Exception) {
+                // Fall through to now: a line with an odd timestamp is still worth showing.
+            }
+        }
+
+        return new \DateTimeImmutable();
+    }
+}

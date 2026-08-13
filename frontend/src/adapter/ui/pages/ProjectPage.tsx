@@ -1,5 +1,6 @@
 import { Link, useParams } from 'react-router-dom'
 import { useGetProjectQuery, usePollProjectMutation } from '../../api/monitoringApi'
+import { LogPanel } from '../components/LogPanel'
 import { StatusChip } from '../components/StatusChip'
 import { Shell } from '../components/Shell'
 import { formatCheckedAt } from '../formatTime'
@@ -140,6 +141,8 @@ export function ProjectPage() {
           )}
         </article>
       </section>
+
+      <LogPanel gameId={card.game_id} />
     </Shell>
   )
 }

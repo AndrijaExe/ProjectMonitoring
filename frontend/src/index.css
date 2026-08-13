@@ -357,6 +357,89 @@ td {
   border-bottom: 1px solid var(--line);
 }
 
+.logs {
+  margin-top: 2rem;
+  border-top: 1px solid var(--line);
+  padding-top: 1.4rem;
+}
+
+.logs-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logs-head h2 {
+  margin: 0;
+}
+
+.logs-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.logs-filters select,
+.logs-filters input {
+  background: var(--ink-2);
+  color: var(--paper);
+  border: 1px solid var(--line);
+  padding: 0.55rem 0.7rem;
+}
+
+.logs-filters button {
+  padding: 0.55rem 0.9rem;
+}
+
+.log-lines {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0.6rem;
+  max-height: 26rem;
+  overflow-y: auto;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 0.82rem;
+}
+
+.log-lines li {
+  display: flex;
+  gap: 0.7rem;
+  align-items: baseline;
+  padding: 0.25rem 0.3rem;
+  border-left: 2px solid transparent;
+}
+
+.log-lines li[data-level='error'] {
+  border-left-color: var(--alert);
+}
+
+.log-lines li[data-level='warning'] {
+  border-left-color: var(--warn);
+}
+
+.log-at {
+  color: var(--mute);
+  white-space: nowrap;
+}
+
+.log-level {
+  color: var(--mute);
+  text-transform: uppercase;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  min-width: 3.4rem;
+}
+
+.log-message {
+  /* Server lines arrive unwrapped and can be long; keep them readable without a scrollbar. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 800px) {
   .hero,
   .row,

@@ -85,6 +85,32 @@ Two things that will eventually bite:
   five-minute runs would blow through the 2,000 monthly minutes, since GitHub rounds every
   job up to a full minute.
 
+## 5. Logs in the console (optional)
+
+The project page can show the target's Render logs, so a red probe and the lines that explain
+it live on the same screen. Without a key the panel says so and nothing else breaks.
+
+1. Create a key at Account Settings > API Keys in the Render dashboard. It is shown once.
+2. Add it to `monitoring-api` > Environment as `RENDER_API_KEY`, then redeploy.
+
+Nothing else to configure: the API finds the service by the hostname already stored in the
+project's health URL, so any target on `*.onrender.com` in the same workspace works, including
+`monitoring-api` itself. The lookup result is cached for an hour.
+
+Two limits are worth stating plainly:
+
+- **A Render API key has no read-only mode.** It authorises everything you can do in the
+  dashboard, deleting services included. It stays in the API's environment and is never sent
+  to the browser, and the API exposes no route that does anything with it beyond reading logs,
+  so what an admin-token holder can reach is limited to the panel. Treat the key as a
+  credential of the same weight as the database password anyway.
+- Free plans keep only a short window of logs, and the panel asks for the last 24 hours. For
+  anything older, use the Render dashboard.
+
+Supabase logs are deliberately not wired up: their free tier keeps one day of Postgres logs
+behind a separate management token, and the database is quiet enough that the probe history
+already tells that story.
+
 ## Free tier limits worth knowing
 
 - The API sleeps after 15 minutes without traffic and takes close to a minute to wake. The

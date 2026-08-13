@@ -53,6 +53,7 @@ flowchart TB
 - Poll `/healthz` and `/readyz` on demand or via `bin/console app:poll-health`
 - Accept metric batches from game backends (`X-Ingest-Token`)
 - Show a fleet board plus a project detail page
+- Read the target's host logs beside its probe history
 
 Management controls (kill-switch, provider routing, Unreal remote) are out of scope.
 
@@ -76,6 +77,22 @@ can be refused over traffic that belongs to strangers. The same URL answers `200
 home connection at the same moment. Recording that as `error` would blame the game for
 someone else's noise, so the probe backs off, retries once, and otherwise records who
 refused it.
+
+## Logs
+
+`LogSource` is a port with one adapter, `RenderLogSource`. The console never talks to Render:
+it asks this API, which holds the key. That is the whole reason the port exists — a Render key
+authorises everything the dashboard can do, so the set of things it can be used for has to be
+the set of things this codebase implements, not whatever a compromised browser session invents.
+
+The Render service is resolved from the hostname in the project's health URL rather than stored
+as another column, so registering a project stays a matter of naming its endpoints. The lookup
+is cached for an hour. A target hosted elsewhere is refused before any request goes out.
+
+Everything that can go wrong here — no key, a rejected key, an unknown service, Render being
+unreachable — comes back as a note on an empty panel instead of an exception. The probe history
+on the same page is the part that matters, and it should not disappear because an optional
+integration is misconfigured.
 
 ## Auth
 

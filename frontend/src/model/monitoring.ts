@@ -54,6 +54,26 @@ export type OverviewResponse = {
   projects: ProjectCard[]
 }
 
+export type LogLine = {
+  at: string
+  message: string
+  level: string | null
+  type: string | null
+}
+
+export type ProjectLogs = {
+  /** False when the host has no API key wired, which is a setup step rather than a fault. */
+  configured: boolean
+  lines: LogLine[]
+  note: string | null
+}
+
+export type LogQueryArgs = {
+  gameId: string
+  level?: string
+  text?: string
+}
+
 export function displayStatus(status: string | null | undefined): HealthStatus {
   if (
     status === 'ok' ||
