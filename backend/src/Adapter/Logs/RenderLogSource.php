@@ -85,39 +85,98 @@ final class RenderLogSource implements LogSource
      */
     private function service(Project $project): array
     {
-        $name = $this->serviceName($project->healthUrl);
+        $host = $this->renderHost($project->healthUrl);
 
         /** @var array{id: string, ownerId: string} */
-        return $this->cache->get('render_service_'.$name, function (ItemInterface $item) use ($name): array {
+        return $this->cache->get('render_service_'.str_replace('.', '_', $host), function (ItemInterface $item) use ($host): array {
             $item->expiresAfter(self::SERVICE_LOOKUP_TTL);
 
-            $rows = $this->get('/services', ['name' => $name, 'limit' => 1]);
-            foreach ($rows as $row) {
-                // List endpoints wrap each item, but tolerate a bare object too.
-                $service = is_array($row) && isset($row['service']) && is_array($row['service'])
-                    ? $row['service']
-                    : $row;
-
-                if (is_array($service) && isset($service['id'], $service['ownerId'])) {
-                    return [
-                        'id' => (string) $service['id'],
-                        'ownerId' => (string) $service['ownerId'],
-                    ];
-                }
-            }
-
-            throw new LogsUnavailable(sprintf('No Render service named "%s" in this workspace.', $name));
+            return $this->resolve($host);
         });
     }
 
-    private function serviceName(string $healthUrl): string
+    /**
+     * @return array{id: string, ownerId: string}
+     */
+    private function resolve(string $host): array
+    {
+        $name = substr($host, 0, -strlen(self::RENDER_HOST_SUFFIX));
+
+        // Fast path. Holds whenever the hostname was still free when the service was created.
+        foreach ($this->services(['name' => $name, 'limit' => 20]) as $service) {
+            if (($service['name'] ?? null) === $name) {
+                return $this->identity($service);
+            }
+        }
+
+        // Render appends a suffix to the hostname when the name is taken platform-wide, so the
+        // two can disagree. The URL it reports is the authority.
+        $seen = [];
+        foreach ($this->services(['limit' => 100]) as $service) {
+            $url = $service['serviceDetails']['url'] ?? '';
+            if (is_string($url) && $url !== '' && parse_url($url, PHP_URL_HOST) === $host) {
+                return $this->identity($service);
+            }
+
+            if (isset($service['name'])) {
+                $seen[] = (string) $service['name'];
+            }
+        }
+
+        throw new LogsUnavailable(sprintf(
+            'No Render service serves %s. This key sees: %s.',
+            $host,
+            $seen === [] ? 'nothing at all' : implode(', ', array_slice($seen, 0, 12)),
+        ));
+    }
+
+    /**
+     * @param array<string, mixed> $service
+     *
+     * @return array{id: string, ownerId: string}
+     */
+    private function identity(array $service): array
+    {
+        if (!isset($service['id'], $service['ownerId'])) {
+            throw new LogsUnavailable('Render described a service without an id.');
+        }
+
+        return [
+            'id' => (string) $service['id'],
+            'ownerId' => (string) $service['ownerId'],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $query
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function services(array $query): array
+    {
+        $services = [];
+        foreach ($this->get('/services', $query) as $row) {
+            // List endpoints wrap each item, but tolerate a bare object too.
+            $service = is_array($row) && isset($row['service']) && is_array($row['service'])
+                ? $row['service']
+                : $row;
+
+            if (is_array($service)) {
+                $services[] = $service;
+            }
+        }
+
+        return $services;
+    }
+
+    private function renderHost(string $healthUrl): string
     {
         $host = (string) (parse_url($healthUrl, PHP_URL_HOST) ?? '');
         if (!str_ends_with($host, self::RENDER_HOST_SUFFIX)) {
             throw new LogsUnavailable('Logs are only wired for targets hosted on Render.');
         }
 
-        return substr($host, 0, -strlen(self::RENDER_HOST_SUFFIX));
+        return $host;
     }
 
     /**

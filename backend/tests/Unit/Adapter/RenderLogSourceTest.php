@@ -81,7 +81,7 @@ final class RenderLogSourceTest extends TestCase
                 ++$lookups;
 
                 return new MockResponse(json_encode([
-                    ['service' => ['id' => 'srv-123', 'ownerId' => 'tea-9']],
+                    ['service' => ['id' => 'srv-123', 'ownerId' => 'tea-9', 'name' => 'loop9-backend']],
                 ]));
             }
 
@@ -118,13 +118,60 @@ final class RenderLogSourceTest extends TestCase
         self::assertSame(0, $client->getRequestsCount());
     }
 
-    public function testAnUnknownServiceNameIsReported(): void
+    public function testItFallsBackToTheUrlRenderReportsWhenTheNameDiffers(): void
     {
-        $client = new MockHttpClient(new MockResponse('[]'));
+        // Render appends a suffix to the hostname when the name is taken platform-wide, so a
+        // service called "api" can answer on api-0gy1.onrender.com.
+        $client = new MockHttpClient(function (string $method, string $url): MockResponse {
+            if (str_contains($url, 'name=loop9-backend')) {
+                return new MockResponse('[]');
+            }
+
+            if (str_contains($url, '/services')) {
+                return new MockResponse(json_encode([
+                    ['service' => [
+                        'id' => 'srv-other',
+                        'ownerId' => 'tea-9',
+                        'name' => 'unrelated',
+                        'serviceDetails' => ['url' => 'https://unrelated.onrender.com'],
+                    ]],
+                    ['service' => [
+                        'id' => 'srv-777',
+                        'ownerId' => 'tea-9',
+                        'name' => 'loop9-backend-renamed',
+                        'serviceDetails' => ['url' => 'https://loop9-backend.onrender.com'],
+                    ]],
+                ]));
+            }
+
+            return new MockResponse(json_encode(['logs' => []]));
+        });
+
+        $source = new RenderLogSource($client, new ArrayAdapter(), 'rnd_key');
+        $source->recent($this->project(), new LogFilter());
+
+        self::assertSame(3, $client->getRequestsCount());
+    }
+
+    public function testAMissingServiceReportsWhatTheKeyCanSee(): void
+    {
+        $client = new MockHttpClient(function (string $method, string $url): MockResponse {
+            if (str_contains($url, 'name=loop9-backend')) {
+                return new MockResponse('[]');
+            }
+
+            return new MockResponse(json_encode([
+                ['service' => ['id' => 'srv-1', 'ownerId' => 'tea-9', 'name' => 'monitoring-api']],
+                ['service' => ['id' => 'srv-2', 'ownerId' => 'tea-9', 'name' => 'monitoring-console']],
+            ]));
+        });
+
         $source = new RenderLogSource($client, new ArrayAdapter(), 'rnd_key');
 
         $this->expectException(LogsUnavailable::class);
-        $this->expectExceptionMessage('No Render service named "loop9-backend"');
+        // Naming what the key can reach turns "not found" into a diagnosis: a key from the
+        // wrong workspace lists the wrong services.
+        $this->expectExceptionMessage('No Render service serves loop9-backend.onrender.com. This key sees: monitoring-api, monitoring-console.');
 
         $source->recent($this->project(), new LogFilter());
     }
