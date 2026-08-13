@@ -27,6 +27,23 @@ final readonly class MetricAlert implements Notification
     ) {
     }
 
+    /**
+     * What a raised alarm is called on screen.
+     *
+     * The stored state is only a key, because that is all the deduplication needs. A console
+     * showing "storage.memory" to its reader would be leaking a database value into a sentence.
+     */
+    public static function describe(string $key): string
+    {
+        return match (true) {
+            str_starts_with($key, 'rate:') => sprintf('%s is rising faster than its limit', substr($key, 5)),
+            $key === 'quiet' => 'nothing counted for a day',
+            $key === 'players.gone' => 'nobody online',
+            $key === 'storage.memory' => 'counters kept in memory',
+            default => $key,
+        };
+    }
+
     public function cleared(): self
     {
         return new self(

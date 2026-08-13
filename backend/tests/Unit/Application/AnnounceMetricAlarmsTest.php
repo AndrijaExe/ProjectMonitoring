@@ -40,7 +40,7 @@ final class AnnounceMetricAlarmsTest extends TestCase
         self::assertCount(1, $channel->sent);
         self::assertStringContainsString('ai.fallback is rising fast', $channel->sent[0]->subject());
         self::assertStringContainsString('grew by 40 in the last hour', $channel->sent[0]->body());
-        self::assertSame(['rate:ai.fallback'], $state->openKeys(GameId::fromString('loop9')));
+        self::assertSame(['rate:ai.fallback'], array_keys($state->raised(GameId::fromString('loop9'))));
     }
 
     public function testACounterBackUnderItsCeilingReportsTheRecoveryAndCanFireAgain(): void
@@ -56,7 +56,7 @@ final class AnnounceMetricAlarmsTest extends TestCase
         self::assertCount(1, $channel->sent);
         self::assertStringContainsString('recovered', $channel->sent[0]->subject());
         // Closed, so the next spike is news again rather than a duplicate.
-        self::assertSame([], $state->openKeys(GameId::fromString('loop9')));
+        self::assertSame([], array_keys($state->raised(GameId::fromString('loop9'))));
     }
 
     public function testAGameThatHasNeverCountedAnythingIsNotCalledQuiet(): void
@@ -135,7 +135,7 @@ final class AnnounceMetricAlarmsTest extends TestCase
 
         // Remembering an alarm nobody received would silence it for good, which is worse than
         // sending it twice.
-        self::assertSame([], $state->openKeys(GameId::fromString('loop9')));
+        self::assertSame([], array_keys($state->raised(GameId::fromString('loop9'))));
         self::assertContains('Could not send a metric alarm.', $logger->messages);
     }
 
@@ -146,7 +146,7 @@ final class AnnounceMetricAlarmsTest extends TestCase
         $this->announcer(new InMemoryMetricStore(), $state, new FakeAlertChannel(configured: false))
             ->forReading($this->project(), new GameReading([], [], 'memory'), [], $this->now());
 
-        self::assertSame([], $state->openKeys(GameId::fromString('loop9')));
+        self::assertSame([], array_keys($state->raised(GameId::fromString('loop9'))));
     }
 
     private function announcer(

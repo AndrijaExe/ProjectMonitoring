@@ -128,6 +128,12 @@ the mail is away: recording an alarm that was never delivered would silence it p
 which is the one outcome worse than a duplicate. Evaluation runs only when a poll found the game
 up, so a down target produces one alert about being down rather than a second about its numbers.
 
+That stored state is also what the console shows, because mail is the wrong place to ask what is
+wrong right now: it reports what changed at 3am and says nothing about whether it still holds.
+Each card carries its raised alarms oldest first, since "since Saturday" is the part that changes
+what an operator does about it. The stored key is translated on the way out — a reader should
+never be shown `storage.memory` in the middle of a sentence.
+
 ### The one alarm this design cannot send
 
 Every alert above depends on a probe running. Nothing here can announce that the probes

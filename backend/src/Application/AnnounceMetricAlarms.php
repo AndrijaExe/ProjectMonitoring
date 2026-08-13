@@ -58,7 +58,7 @@ final class AnnounceMetricAlarms
         }
 
         $raised = $this->evaluate($project, $reading, $previousGauges, $now);
-        $open = $this->alarms->openKeys($project->gameId);
+        $open = array_keys($this->alarms->raised($project->gameId));
 
         foreach ($raised as $alert) {
             if (!in_array($alert->key, $open, true)) {

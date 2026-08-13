@@ -15,9 +15,9 @@ namespace App\Model;
 interface AlarmStateStore
 {
     /**
-     * @return list<string> keys currently raised for this project
+     * @return array<string, \DateTimeImmutable> raised keys, each with the time it was raised
      */
-    public function openKeys(GameId $gameId): array;
+    public function raised(GameId $gameId): array;
 
     public function open(GameId $gameId, string $key, \DateTimeImmutable $at): void;
 

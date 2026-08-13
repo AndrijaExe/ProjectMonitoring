@@ -60,7 +60,12 @@ final class MonitoringOverviewTest extends TestCase
         self::assertCount(2, $recorded);
         self::assertSame(HealthEndpoint::Health, $recorded[0]->endpoint);
 
-        $overview = (new GetMonitoringOverview($projects, $snapshots, new InMemoryMetricStore()))->execute();
+        $overview = (new GetMonitoringOverview(
+            $projects,
+            $snapshots,
+            new InMemoryMetricStore(),
+            new InMemoryAlarmStateStore(),
+        ))->execute();
         self::assertCount(1, $overview->projects);
         self::assertSame('ok', $overview->projects[0]->healthStatus);
         self::assertSame('ready', $overview->projects[0]->readyStatus);
@@ -96,12 +101,34 @@ final class MonitoringOverviewTest extends TestCase
         self::assertNull($overview->lastProbeAt);
     }
 
+    public function testRaisedAlarmsReachTheCardOldestFirstAndInWords(): void
+    {
+        $alarms = new InMemoryAlarmStateStore();
+        $loop9 = GameId::fromString('loop9');
+        $alarms->open($loop9, 'storage.memory', new \DateTimeImmutable('-30 minutes'));
+        $alarms->open($loop9, 'rate:api.errors', new \DateTimeImmutable('-6 hours'));
+
+        $card = (new GetMonitoringOverview(
+            $this->projects(),
+            new InMemoryHealthSnapshotStore(),
+            new InMemoryMetricStore(),
+            $alarms,
+        ))->execute()->projects[0];
+
+        // Oldest first, because "since Saturday" is the part that changes what you do about it.
+        self::assertSame(['rate:api.errors', 'storage.memory'], array_column($card->alarms, 'key'));
+        // And a stored key is a database value, not something to show a reader.
+        self::assertSame('api.errors is rising faster than its limit', $card->alarms[0]['label']);
+        self::assertSame('counters kept in memory', $card->alarms[1]['label']);
+    }
+
     public function testAnEmptyFleetIsNeverStale(): void
     {
         $overview = new GetMonitoringOverview(
             new InMemoryProjectRepository(),
             new InMemoryHealthSnapshotStore(),
             new InMemoryMetricStore(),
+            new InMemoryAlarmStateStore(),
         );
 
         self::assertFalse($overview->execute()->stale);
@@ -116,6 +143,7 @@ final class MonitoringOverviewTest extends TestCase
             $this->projects(),
             $snapshots,
             new InMemoryMetricStore(),
+            new InMemoryAlarmStateStore(),
             staleAfterMinutes: 0,
         );
 
@@ -124,7 +152,12 @@ final class MonitoringOverviewTest extends TestCase
 
     private function overviewOver(InMemoryHealthSnapshotStore $snapshots): GetMonitoringOverview
     {
-        return new GetMonitoringOverview($this->projects(), $snapshots, new InMemoryMetricStore());
+        return new GetMonitoringOverview(
+            $this->projects(),
+            $snapshots,
+            new InMemoryMetricStore(),
+            new InMemoryAlarmStateStore(),
+        );
     }
 
     private function projects(): InMemoryProjectRepository

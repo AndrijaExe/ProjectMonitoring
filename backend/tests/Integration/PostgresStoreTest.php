@@ -207,10 +207,10 @@ final class PostgresStoreTest extends TestCase
         $alarms->open($this->loop9, 'rate:ai.fallback', $now->modify('+1 hour'));
         $alarms->open($this->loop9, 'storage.memory', $now);
 
-        self::assertSame(['rate:ai.fallback', 'storage.memory'], $alarms->openKeys($this->loop9));
+        self::assertSame(['rate:ai.fallback', 'storage.memory'], array_keys($alarms->raised($this->loop9)));
 
         $alarms->close($this->loop9, 'rate:ai.fallback');
-        self::assertSame(['storage.memory'], $alarms->openKeys($this->loop9));
+        self::assertSame(['storage.memory'], array_keys($alarms->raised($this->loop9)));
     }
 
     public function testAGaugeReportsItsNewestValueAndStaysOutOfTheTotals(): void

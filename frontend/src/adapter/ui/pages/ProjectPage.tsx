@@ -112,6 +112,22 @@ export function ProjectPage() {
         </span>
       </div>
 
+      {card.alarms?.length ? (
+        // Mail is the wrong place to answer "what is wrong right now": it says what changed at
+        // 3am and nothing about whether it still holds.
+        <section className="alarms">
+          <h2>Open alarms</h2>
+          <ul>
+            {card.alarms.map((alarm) => (
+              <li key={alarm.key}>
+                <span>{alarm.label}</span>
+                <span className="meta">since {formatCheckedAt(alarm.since)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       <section className="split">
         <article>
           <h2>Health history</h2>

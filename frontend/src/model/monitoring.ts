@@ -15,6 +15,12 @@ export type ProbeSnapshot = {
   checked_at: string | null
 }
 
+export type RaisedAlarm = {
+  key: string
+  label: string
+  since: string
+}
+
 export type ProjectCard = {
   game_id: string
   display_name: string
@@ -28,6 +34,8 @@ export type ProjectCard = {
     /** Levels at the last reading, such as players online. Never summed over the day. */
     gauges: Record<string, number>
   }
+  /** Mailed and not yet cleared, oldest first. */
+  alarms: RaisedAlarm[]
 }
 
 export type HealthHistoryRow = {

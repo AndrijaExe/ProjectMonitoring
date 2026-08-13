@@ -12,12 +12,12 @@ final class InMemoryAlarmStateStore implements AlarmStateStore
     /** @var array<string, array<string, \DateTimeImmutable>> */
     private array $open = [];
 
-    public function openKeys(GameId $gameId): array
+    public function raised(GameId $gameId): array
     {
-        $keys = array_keys($this->open[$gameId->value] ?? []);
-        sort($keys);
+        $raised = $this->open[$gameId->value] ?? [];
+        ksort($raised);
 
-        return $keys;
+        return $raised;
     }
 
     public function open(GameId $gameId, string $key, \DateTimeImmutable $at): void

@@ -82,6 +82,12 @@ export function FleetPage() {
                 <div className="chips">
                   <StatusChip label="health" status={project.health.status} />
                   <StatusChip label="ready" status={project.ready.status} />
+                  {project.alarms?.length ? (
+                    <span className="chip chip-down">
+                      <span className="chip-label">alarms</span>
+                      {project.alarms.length}
+                    </span>
+                  ) : null}
                   {project.metrics.gauges?.['players.online'] != null ? (
                     <span className="chip chip-unseen">
                       <span className="chip-label">players online</span>

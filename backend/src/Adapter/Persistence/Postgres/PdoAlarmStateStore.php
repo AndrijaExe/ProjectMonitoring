@@ -13,14 +13,19 @@ final class PdoAlarmStateStore implements AlarmStateStore
     {
     }
 
-    public function openKeys(GameId $gameId): array
+    public function raised(GameId $gameId): array
     {
         $statement = $this->connection->pdo()->prepare(
-            'SELECT alarm_key FROM metric_alarms WHERE game_id = :game_id ORDER BY alarm_key ASC',
+            'SELECT alarm_key, opened_at FROM metric_alarms WHERE game_id = :game_id ORDER BY alarm_key ASC',
         );
         $statement->execute(['game_id' => $gameId->value]);
 
-        return array_map(static fn ($row): string => (string) $row['alarm_key'], $statement->fetchAll());
+        $raised = [];
+        foreach ($statement->fetchAll() as $row) {
+            $raised[(string) $row['alarm_key']] = new \DateTimeImmutable((string) $row['opened_at']);
+        }
+
+        return $raised;
     }
 
     public function open(GameId $gameId, string $key, \DateTimeImmutable $at): void

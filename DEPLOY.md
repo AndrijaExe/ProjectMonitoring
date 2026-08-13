@@ -223,6 +223,10 @@ Each alarm is mailed once when it opens and once when it clears, the same as a p
 the state lives in the `metric_alarms` table. An alarm whose mail could not be delivered is not
 recorded as raised, so it is retried on the next poll rather than lost.
 
+Anything still raised is listed on the project page under **Open alarms**, with the time it
+started, and counted as a chip on the fleet board. That is deliberate: a mail tells you what
+changed at 3am, and nothing about whether it is still true when you sit down at nine.
+
 ## 7. Game counters (optional)
 
 A probe says the web server answered. It says nothing about whether players are getting replies,

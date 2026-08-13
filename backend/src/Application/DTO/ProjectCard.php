@@ -7,8 +7,9 @@ namespace App\Application\DTO;
 final readonly class ProjectCard
 {
     /**
-     * @param array<string, float> $recentMetricTotals
-     * @param array<string, float> $gauges
+     * @param array<string, float>                             $recentMetricTotals
+     * @param array<string, float>                             $gauges
+     * @param list<array{key: string, label: string, since: string}> $alarms raised, oldest first
      */
     public function __construct(
         public string $gameId,
@@ -26,6 +27,7 @@ final readonly class ProjectCard
         public int $recentMetricCount,
         public array $recentMetricTotals,
         public array $gauges = [],
+        public array $alarms = [],
     ) {
     }
 
@@ -58,6 +60,9 @@ final readonly class ProjectCard
                 // Levels, not totals: the newest reading of each, or nothing at all.
                 'gauges' => (object) $this->gauges,
             ],
+            // What was mailed and has not cleared. Without this the console is the one place
+            // that cannot tell you the game has been shouting since Saturday.
+            'alarms' => $this->alarms,
         ];
     }
 }

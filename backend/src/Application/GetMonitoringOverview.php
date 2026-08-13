@@ -6,10 +6,12 @@ namespace App\Application;
 
 use App\Application\DTO\MonitoringOverview;
 use App\Application\DTO\ProjectCard;
+use App\Model\AlarmStateStore;
 use App\Model\GameId;
 use App\Model\HealthEndpoint;
 use App\Model\HealthSnapshot;
 use App\Model\HealthSnapshotStore;
+use App\Model\MetricAlert;
 use App\Model\MetricStore;
 use App\Model\Project;
 use App\Model\ProjectRepository;
@@ -21,6 +23,7 @@ final class GetMonitoringOverview
         private readonly ProjectRepository $projects,
         private readonly HealthSnapshotStore $healthSnapshots,
         private readonly MetricStore $metrics,
+        private readonly AlarmStateStore $alarms,
         #[Autowire('%env(int:POLL_MAX_AGE_MINUTES)%')]
         private readonly int $staleAfterMinutes = 120,
     ) {
@@ -95,7 +98,29 @@ final class GetMonitoringOverview
             recentMetricCount: $this->metrics->countSince($project->gameId, $since),
             recentMetricTotals: $this->metrics->totalsSince($project->gameId, $since),
             gauges: $this->metrics->latestGauges($project->gameId, $since),
+            alarms: $this->raisedAlarms($project),
         );
+    }
+
+    /**
+     * @return list<array{key: string, label: string, since: string}> oldest first
+     */
+    private function raisedAlarms(Project $project): array
+    {
+        $raised = $this->alarms->raised($project->gameId);
+        uasort($raised, static fn (\DateTimeImmutable $a, \DateTimeImmutable $b): int => $a <=> $b);
+
+        $alarms = [];
+        foreach ($raised as $key => $openedAt) {
+            $alarms[] = [
+                'key' => $key,
+                // The stored state is a key, which is a database value rather than a sentence.
+                'label' => MetricAlert::describe($key),
+                'since' => $openedAt->format(\DateTimeInterface::ATOM),
+            ];
+        }
+
+        return $alarms;
     }
 
     public function requireProject(string $gameId): Project
