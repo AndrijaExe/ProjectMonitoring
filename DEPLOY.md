@@ -42,8 +42,11 @@ the base URL. No URL is hardcoded in source.
 ## 3. After the first deploy
 
 1. Open `monitoring-console` and check its real URL. Render appends a suffix when the name
-   is taken, so it may be `monitoring-console-a1b2.onrender.com`. If it differs from what
-   you entered, fix `CORS_ALLOWED_ORIGINS` on `monitoring-api`.
+   is already taken across the platform, and `monitoring-api` in particular belongs to
+   somebody else, so the API landed on `https://monitoring-api-0gy1.onrender.com` while the
+   console kept `https://monitoring-console.onrender.com`. If the console URL differs from
+   what you entered, fix `CORS_ALLOWED_ORIGINS` on `monitoring-api`. The console itself
+   needs no correction: its build reads the API hostname from Render.
 2. Read `ADMIN_TOKEN` from `monitoring-api` > Environment. That is the console password.
 3. Check the API answers:
 
@@ -62,7 +65,7 @@ warning at startup when the variable is empty.
 ## 4. Scheduled polling
 
 [`.github/workflows/poll.yml`](.github/workflows/poll.yml) calls `POST /api/v1/poll` every
-ten minutes. In the GitHub repo settings add:
+five minutes. Under Settings > Secrets and variables > Actions add:
 
 - Variable `API_URL` — `https://monitoring-api.onrender.com`
 - Secret `ADMIN_TOKEN` — the generated value from step 3
@@ -76,9 +79,11 @@ Two things that will eventually bite:
 
 - **GitHub disables scheduled workflows after 60 days without repository activity.** If the
   board goes quiet, check the Actions tab first.
-- Ten-minute polling keeps the instance running roughly 24/7, and Render's free tier
-  allows 750 instance hours a month against a month's 730. One service fits; a second free
-  service would not.
+- Polling keeps the instance running roughly 24/7, and Render's free tier allows 750
+  instance hours a month against a month's 730. One service fits; a second free service
+  would not. Minutes are free here because the repository is public — on a private one,
+  five-minute runs would blow through the 2,000 monthly minutes, since GitHub rounds every
+  job up to a full minute.
 
 ## Free tier limits worth knowing
 

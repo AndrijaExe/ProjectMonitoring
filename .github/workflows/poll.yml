@@ -4,7 +4,10 @@ name: Poll health
 # API instance awake, which means the console usually loads without a cold start.
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    # Five minutes rather than ten: GitHub delays scheduled runs under load, and a gap
+    # longer than 15 minutes lets the free instance sleep, which costs a 40 second wake-up
+    # on the next visit. Minutes are free on a public repository.
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 concurrency:
