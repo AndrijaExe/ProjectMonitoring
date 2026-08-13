@@ -49,6 +49,7 @@ export function ProjectPage() {
 
   const card = data.project
   const gauges = Object.entries(card.metrics.gauges ?? {})
+  const counters = Object.entries(card.metrics.totals_24h)
   const lastReadingAt = data.recent_metrics[0]?.recorded_at ?? null
 
   return (
@@ -72,7 +73,11 @@ export function ProjectPage() {
             onClick={() => {
               // A destructive action deserves a question, and the count makes the
               // consequence concrete rather than abstract.
-              if (window.confirm(`Delete ${data.health_history.length} stored probe rows for ${card.display_name}?`)) {
+              if (
+                window.confirm(
+                  `Delete ${data.health_history.length} stored probe rows for ${card.display_name}?`,
+                )
+              ) {
                 void clearHistory(card.game_id)
               }
             }}
@@ -161,43 +166,50 @@ export function ProjectPage() {
               <p className="meta">read {formatCheckedAt(lastReadingAt)}</p>
             </>
           ) : null}
-          {Object.keys(card.metrics.totals_24h).length > 0 ? (
-            <>
-              <h3>Last 24h</h3>
-              <ul className="totals">
-                {Object.entries(card.metrics.totals_24h).map(([name, total]) => (
-                  <li key={name}>
-                    <span>{name}</span>
-                    <span className="mono">{total}</span>
-                  </li>
-                ))}
-              </ul>
-            </>
-          ) : null}
-          {data.recent_metrics.length === 0 ? (
+          <h3>Last 24h</h3>
+          {counters.length > 0 ? (
+            <ul className="totals">
+              {counters.map(([name, total]) => (
+                <li key={name}>
+                  <span>{name}</span>
+                  <span className="mono">{total}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            // Said here rather than left to the reader, who would otherwise take an empty
+            // list as a broken pipe. The counts move when players do, and probes are not players.
             <p className="empty">
               Nothing counted yet. The game counts what players do — messages, logins, finished
               runs, errors — so these stay empty until somebody plays.
             </p>
+          )}
+          {data.recent_metrics.length === 0 ? (
+            <p className="empty">
+              No reading taken yet. The game's numbers are read on every poll that finds it up.
+            </p>
           ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>When</th>
-                  <th>Name</th>
-                  <th>Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                {metrics.visible.map((metric) => (
-                  <tr key={`${metric.name}-${metric.recorded_at}-${metric.value}`}>
-                    <td className="mono">{formatCheckedAt(metric.recorded_at)}</td>
-                    <td>{metric.name}</td>
-                    <td className="mono">{metric.value}</td>
+            <>
+              <h3>Readings</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>Name</th>
+                    <th>Value</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {metrics.visible.map((metric) => (
+                    <tr key={`${metric.name}-${metric.recorded_at}-${metric.value}`}>
+                      <td className="mono">{formatCheckedAt(metric.recorded_at)}</td>
+                      <td>{metric.name}</td>
+                      <td className="mono">{metric.value}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
           )}
           <SeeMore
             hidden={metrics.hidden}
