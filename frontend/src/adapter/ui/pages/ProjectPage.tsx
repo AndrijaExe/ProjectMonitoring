@@ -55,7 +55,7 @@ export function ProjectPage() {
           disabled={pollState.isLoading}
           onClick={() => void pollProject(card.game_id)}
         >
-          {pollState.isLoading ? 'Polling…' : 'Poll now'}
+          {pollState.isLoading ? 'Updating…' : 'Update status'}
         </button>
       }
     >

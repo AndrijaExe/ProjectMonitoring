@@ -18,7 +18,7 @@ export function FleetPage() {
       lede="Health and ready probes for every registered game. Loop 9 is seeded; the next title is another project card, not a rewrite."
       action={
         <button type="button" disabled={pollState.isLoading} onClick={() => void pollAll()}>
-          {pollState.isLoading ? 'Polling…' : 'Poll all now'}
+          {pollState.isLoading ? 'Updating…' : 'Update status'}
         </button>
       }
     >
