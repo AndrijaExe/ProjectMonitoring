@@ -1,61 +1,106 @@
-# Deploy to Render
+# Deploy
 
-[`render.yaml`](render.yaml) is a Blueprint: one file that creates the whole stack, so the
-console is reachable from any browser instead of only from the laptop that ran `npm run dev`.
+The console runs on free infrastructure. Render charges for Postgres and has no free cron,
+so those two pieces live elsewhere:
 
-| Resource | Type | Role |
+| Piece | Where | Cost |
 |---|---|---|
-| `monitoring-api` | Web service, Docker | Symfony JSON API, Apache + PHP 8.4 |
-| `monitoring-console` | Static site | The React build, with SPA fallback routing |
-| `monitoring-db` | Postgres | Registry, probe history, metric samples |
-| `monitoring-poll` | Cron, every 5 min | `app:poll-health`, so history fills without a visitor |
+| API (`monitoring-api`) | Render web service, Docker, free instance | $0 |
+| Console (`monitoring-console`) | Render static site | $0 |
+| Database | Supabase Postgres, free project | $0 |
+| Scheduled polling | GitHub Actions, every 10 minutes | $0 |
 
-The cron job is the point of hosting this: probes run on a schedule, so the board shows a
-real timeline rather than whatever the last person to open the page happened to trigger.
+Moving the frontend off Render would save nothing — static sites are already free. The cost
+was the API instance and the managed database, so those are what changed.
 
-## First deploy
+## 1. Database on Supabase
 
-1. Push this repo to GitHub, then in Render: **New > Blueprint**, pick the repo, apply.
-2. Choose a plan for `monitoring-db` when prompted. A free database is **deleted after 30
-   days** and takes the probe history with it.
-3. `CORS_ALLOWED_ORIGINS` is the one value Render cannot fill in, because the console URL
-   does not exist until its first build. Leave it blank for now.
-4. When both services are live, open `monitoring-console` and copy its URL, for example
-   `https://monitoring-console.onrender.com`.
-5. Paste it into `monitoring-api` > Environment > `CORS_ALLOWED_ORIGINS`, then save. Render
-   redeploys the API. Until this is set, the browser blocks every API call and the login
-   screen just says the token was rejected; the API logs a warning at startup for this.
-6. Read `ADMIN_TOKEN` from `monitoring-api` > Environment. Render generated it, so it is a
-   real secret and not the placeholder in `.env`. That value is the console password.
+Create a project, then **Connect** and copy a **pooler** connection string. Not the direct
+one: Supabase's direct host is IPv6 only, and Render dials out over IPv4. Either pooler
+port works — the app detects port `6543` (or `?pgbouncer=true`) and switches PDO to
+client-side prepared statements, which is what a transaction pooler requires.
 
-Everything else wires itself: `DATABASE_URL` comes from the database, and the console build
-receives the API's public hostname as `API_HOST`, which `vite.config.ts` turns into
-`VITE_API_BASE_URL`. No URL is hardcoded anywhere.
+```
+postgresql://postgres.abcdefgh:PASSWORD@aws-0-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require
+```
 
-## Verify
+Substitute the real password. Keep `sslmode=require`; Supabase refuses plaintext.
+
+## 2. Blueprint on Render
+
+**New > Blueprint**, pick the repo, apply [`render.yaml`](render.yaml). Two values are
+prompted for:
+
+- `DATABASE_URL` — the string from step 1.
+- `CORS_ALLOWED_ORIGINS` — the console URL, which does not exist yet. Enter
+  `https://monitoring-console.onrender.com` as a best guess; step 3 confirms it.
+
+Everything else wires itself: `ADMIN_TOKEN` and `LOOP9_INGEST_TOKEN` are generated, and the
+console build receives the API's hostname as `API_HOST`, which `vite.config.ts` turns into
+the base URL. No URL is hardcoded in source.
+
+## 3. After the first deploy
+
+1. Open `monitoring-console` and check its real URL. Render appends a suffix when the name
+   is taken, so it may be `monitoring-console-a1b2.onrender.com`. If it differs from what
+   you entered, fix `CORS_ALLOWED_ORIGINS` on `monitoring-api`.
+2. Read `ADMIN_TOKEN` from `monitoring-api` > Environment. That is the console password.
+3. Check the API answers:
 
 ```bash
 curl -s https://monitoring-api.onrender.com/healthz   # {"status":"ok"}
 curl -s https://monitoring-api.onrender.com/readyz    # {"status":"ready"} once the DB is reachable
 ```
 
-Then sign in to the console and press **Poll all now**. If `/readyz` answers `not_ready`,
-the API is up but cannot reach Postgres — check `DATABASE_URL` on the service.
+`not_ready` means the API is up but cannot reach Supabase — almost always a wrong password
+or the direct (IPv6) host instead of the pooler.
 
-## Send metrics from Loop 9
+If CORS is wrong, the symptom misleads: the console loads fine and login says the token was
+rejected, because the browser blocked the call before it reached the API. The API logs a
+warning at startup when the variable is empty.
 
-Render generated `LOOP9_INGEST_TOKEN` on `monitoring-api`. Read it there and give the same
-value to the Loop 9 backend:
+## 4. Scheduled polling
 
-```bash
-curl -sS -X POST https://monitoring-api.onrender.com/api/v1/projects/loop9/metrics \
-  -H 'Content-Type: application/json' \
-  -H "X-Ingest-Token: $LOOP9_INGEST_TOKEN" \
-  -d '{"metrics":[{"name":"chat.requests","value":1}]}'
-```
+[`.github/workflows/poll.yml`](.github/workflows/poll.yml) calls `POST /api/v1/poll` every
+ten minutes. In the GitHub repo settings add:
 
-Rotating it means changing it in one place: the env var. The database stores only a
-SHA-256 hash, and `app:db-setup` re-seeds the hash on every deploy.
+- Variable `API_URL` — `https://monitoring-api.onrender.com`
+- Secret `ADMIN_TOKEN` — the generated value from step 3
+
+Run it once by hand from the Actions tab to confirm. A green run prints `{"polled":2}`.
+
+This does double duty: it fills the history while nobody is watching, and it keeps the free
+instance awake, so the console usually loads without a cold start.
+
+Two things that will eventually bite:
+
+- **GitHub disables scheduled workflows after 60 days without repository activity.** If the
+  board goes quiet, check the Actions tab first.
+- Ten-minute polling keeps the instance running roughly 24/7, and Render's free tier
+  allows 750 instance hours a month against a month's 730. One service fits; a second free
+  service would not.
+
+## Free tier limits worth knowing
+
+- The API sleeps after 15 minutes without traffic and takes close to a minute to wake. The
+  poll normally prevents this, but the first load after a quiet stretch can be slow.
+- Supabase pauses a free project after 7 days of inactivity. The ten-minute poll counts as
+  activity, so this only matters if polling stops.
+- Supabase free gives 500 MB. Snapshots are small — roughly ten megabytes a year at this
+  cadence — but nothing prunes old rows yet, so that is the first thing to add if the
+  project ever runs for years.
+- Free instances have no shell access and no persistent disk. Neither matters here: all
+  state is in Postgres.
+
+## Paying to remove the annoyance
+
+If cold starts get irritating, switch `plan: free` to `plan: starter` on `monitoring-api`
+($7/month) and the instance stays warm. That is the only change; the database and the
+schedule can stay where they are.
+
+Going back to fully managed Render Postgres means adding a `databases:` block and pointing
+`DATABASE_URL` at it with `fromDatabase`. Their cron jobs bill by the second with a $1
+monthly minimum per job, so the GitHub Actions schedule stays cheaper regardless.
 
 ## What the container does on boot
 
@@ -65,8 +110,23 @@ SHA-256 hash, and `app:db-setup` re-seeds the hash on every deploy.
   shorter than 16 characters. The image ships a `.env` with development defaults, and a
   public console guarded by a token from a public repository is worse than a failed deploy.
 - Binds Apache to `$PORT`, which Render assigns at runtime.
-- Runs `app:db-setup`, retrying for 30 seconds while the managed database wakes up. It is
-  idempotent, so it works as a boot step on any plan instead of needing a pre-deploy hook.
+- Runs `app:db-setup`, retrying for 30 seconds while the database wakes up. It is
+  idempotent, so it works as a boot step instead of needing a paid pre-deploy hook.
+
+## Send metrics from Loop 9
+
+Render generated `LOOP9_INGEST_TOKEN` on `monitoring-api`. Give the same value to the Loop 9
+backend:
+
+```bash
+curl -sS -X POST https://monitoring-api.onrender.com/api/v1/projects/loop9/metrics \
+  -H 'Content-Type: application/json' \
+  -H "X-Ingest-Token: $LOOP9_INGEST_TOKEN" \
+  -d '{"metrics":[{"name":"chat.requests","value":1}]}'
+```
+
+The database stores only a SHA-256 hash, and `app:db-setup` re-seeds it on every deploy, so
+rotating the token means changing one environment variable.
 
 ## Try the production image locally
 

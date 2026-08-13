@@ -1,21 +1,15 @@
-# Render Blueprint: API + console + database + scheduled polling.
-# Create it once with New > Blueprint, then every push to the default branch redeploys
-# whichever half of the monorepo changed.
-
-databases:
-  - name: monitoring-db
-    databaseName: monitoring
-    user: monitoring
-    region: frankfurt
-    # No plan here on purpose: pick one in the dashboard. A free database is deleted
-    # after 30 days, which takes the probe history with it.
+# Render Blueprint: API + console, both on free instances.
+# The database lives on Supabase and the schedule lives in GitHub Actions, because Render
+# charges for Postgres and has no free cron. See DEPLOY.md.
 
 services:
   - type: web
     name: monitoring-api
     runtime: docker
     region: frankfurt
-    plan: starter
+    # Free instances sleep after 15 minutes without traffic and wake on the next request,
+    # which takes the better part of a minute. The scheduled poll keeps this one awake.
+    plan: free
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     healthCheckPath: /healthz
@@ -36,12 +30,12 @@ services:
         generateValue: true
       - key: LOOP9_INGEST_TOKEN
         generateValue: true
+      # Supabase connection string. Use a pooler URL, not the direct one: the direct host
+      # is IPv6 only. Port 6543 is fine, the app detects the pooler and adjusts.
       - key: DATABASE_URL
-        fromDatabase:
-          name: monitoring-db
-          property: connectionString
-      # Set this to the console URL after the first deploy, e.g.
-      # https://monitoring-console.onrender.com. Without it the browser blocks the SPA.
+        sync: false
+      # The console URL, e.g. https://monitoring-console.onrender.com. Without it the
+      # browser blocks every API call.
       - key: CORS_ALLOWED_ORIGINS
         sync: false
       - key: PROBE_TIMEOUT_SECONDS
@@ -80,39 +74,3 @@ services:
       - path: /*
         name: Referrer-Policy
         value: strict-origin-when-cross-origin
-
-  - type: cron
-    name: monitoring-poll
-    runtime: docker
-    region: frankfurt
-    # Every five minutes, so the board holds real history instead of whatever the last
-    # visitor happened to trigger.
-    schedule: '*/5 * * * *'
-    dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./backend
-    dockerCommand: php bin/console app:poll-health
-    autoDeployTrigger: commit
-    buildFilter:
-      paths:
-        - backend/**
-    envVars:
-      - key: APP_ENV
-        value: prod
-      - key: APP_DEBUG
-        value: '0'
-      - key: APP_SECRET
-        fromService:
-          name: monitoring-api
-          type: web
-          envVarKey: APP_SECRET
-      - key: ADMIN_TOKEN
-        fromService:
-          name: monitoring-api
-          type: web
-          envVarKey: ADMIN_TOKEN
-      - key: DATABASE_URL
-        fromDatabase:
-          name: monitoring-db
-          property: connectionString
-      - key: PROBE_TIMEOUT_SECONDS
-        value: '20'

@@ -16,13 +16,30 @@ final class PostgresConnection
     ) {
     }
 
+    /**
+     * Port 6543 is the Supabase transaction pooler; `pgbouncer=true` is the generic marker.
+     */
+    private const TRANSACTION_POOLER_PORT = 6543;
+
     public function pdo(): \PDO
     {
         return $this->pdo ??= new \PDO($this->dsn(), $this->user(), $this->password(), [
             \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
             \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
-            \PDO::ATTR_EMULATE_PREPARES => false,
+            \PDO::ATTR_EMULATE_PREPARES => $this->emulatesPreparedStatements(),
         ]);
+    }
+
+    /**
+     * A transaction-mode pooler can hand consecutive statements to different backends, so a
+     * server-side prepared statement is gone by the time it is executed. Emulating them
+     * client-side is the documented way through, and PDO still parameterises the values.
+     */
+    public function emulatesPreparedStatements(): bool
+    {
+        $parts = $this->parse();
+
+        return $parts['port'] === self::TRANSACTION_POOLER_PORT || $parts['pgbouncer'];
     }
 
     /**
@@ -66,7 +83,7 @@ final class PostgresConnection
     }
 
     /**
-     * @return array{host: string, port: int, dbname: string, user: string, password: string, sslmode: ?string}
+     * @return array{host: string, port: int, dbname: string, user: string, password: string, sslmode: ?string, pgbouncer: bool}
      */
     private function parse(): array
     {
@@ -80,13 +97,14 @@ final class PostgresConnection
             throw new \RuntimeException('DATABASE_URL is not a valid connection string.');
         }
 
-        $sslmode = null;
+        $query = [];
         if (isset($parsed['query'])) {
-            $query = [];
             parse_str($parsed['query'], $query);
-            if (isset($query['sslmode']) && is_string($query['sslmode'])) {
-                $sslmode = $query['sslmode'];
-            }
+        }
+
+        $sslmode = null;
+        if (isset($query['sslmode']) && is_string($query['sslmode'])) {
+            $sslmode = $query['sslmode'];
         }
 
         return [
@@ -96,6 +114,7 @@ final class PostgresConnection
             'user' => rawurldecode($parsed['user'] ?? 'postgres'),
             'password' => rawurldecode($parsed['pass'] ?? ''),
             'sslmode' => $sslmode,
+            'pgbouncer' => ($query['pgbouncer'] ?? '') === 'true',
         ];
     }
 }

@@ -44,7 +44,7 @@ final class TestDatabase
         ));
     }
 
-    private static function url(): string
+    public static function url(): string
     {
         $url = (string) ($_SERVER['DATABASE_URL'] ?? '');
         if ($url === '') {

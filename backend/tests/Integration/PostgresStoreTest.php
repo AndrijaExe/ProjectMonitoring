@@ -7,6 +7,7 @@ namespace App\Tests\Integration;
 use App\Adapter\Persistence\Postgres\PdoHealthSnapshotStore;
 use App\Adapter\Persistence\Postgres\PdoMetricStore;
 use App\Adapter\Persistence\Postgres\PdoProjectRepository;
+use App\Adapter\Persistence\Postgres\PostgresConnection;
 use App\Model\GameId;
 use App\Model\HealthEndpoint;
 use App\Model\HealthSnapshot;
@@ -126,6 +127,29 @@ final class PostgresStoreTest extends TestCase
         self::assertSame('chat.latency', $recent[0]->name);
         self::assertSame(250.5, $recent[0]->value);
         self::assertSame(['provider' => 'openai'], $recent[1]->tags);
+    }
+
+    public function testTheStoresSurviveAPoolerThatForcesEmulatedPreparedStatements(): void
+    {
+        // Supabase's transaction pooler makes PDO emulate prepares, which changes how floats,
+        // integers and JSONB tags are bound. Same database, only the binding mode differs.
+        $pooled = new PostgresConnection(TestDatabase::url().'?pgbouncer=true');
+        self::assertTrue($pooled->emulatesPreparedStatements());
+
+        $now = new \DateTimeImmutable();
+        $metrics = new PdoMetricStore($pooled);
+        $metrics->recordBatch(new MetricBatch([
+            new MetricSample($this->loop9, 'chat.requests', 2.5, ['provider' => 'openai'], $now),
+        ]));
+
+        $snapshots = new PdoHealthSnapshotStore($pooled);
+        $snapshots->record($this->snapshot(HealthStatus::Ok, $now, 120));
+
+        $since = $now->modify('-1 hour');
+        self::assertSame(1, $metrics->countSince($this->loop9, $since));
+        self::assertSame(['chat.requests' => 2.5], $metrics->totalsSince($this->loop9, $since));
+        self::assertSame(['provider' => 'openai'], $metrics->recent($this->loop9, 5)[0]->tags);
+        self::assertSame(120, $snapshots->latest($this->loop9, HealthEndpoint::Health)?->latencyMs);
     }
 
     private function snapshot(

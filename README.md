@@ -74,8 +74,9 @@ Tests use the separate `monitoring_test` database and truncate between cases, so
 
 ## Deploy
 
-`render.yaml` creates the API, the console, Postgres, and a five-minute poll cron in one
-Blueprint. Steps and the two values you set by hand are in [DEPLOY.md](DEPLOY.md).
+Free end to end: `render.yaml` puts the API and the console on Render free instances, the
+database is a Supabase project, and a GitHub Actions schedule polls every ten minutes,
+which also keeps the API awake. Steps are in [DEPLOY.md](DEPLOY.md).
 
 Browsers only reach the API from origins listed in `CORS_ALLOWED_ORIGINS`. Empty means
 localhost only, which is what you want in development.

@@ -82,17 +82,23 @@ Free hosting tiers drop the request that wakes them, so a timeout is retried onc
 
 ## Hosting
 
-`render.yaml` describes the whole stack, so the topology is reviewable in the repo instead
-of clicked together in a dashboard: a Docker web service for the API, a static site for the
-console, managed Postgres, and a cron job running `app:poll-health` every five minutes.
+`render.yaml` describes the topology, so it is reviewable in the repo instead of clicked
+together in a dashboard: a Docker web service for the API and a static site for the console,
+both on free instances. Postgres is a Supabase project and the schedule is a GitHub Actions
+workflow, because Render bills for managed Postgres and has no free cron.
 
 The API image is Apache + PHP 8.4 with `pdo_pgsql`, built in two stages so Composer never
 ships into the runtime layer. `docker/entrypoint.sh` binds Apache to Render's `$PORT`,
 validates the admin token, and applies the schema before serving. The console build reads
 the API's public hostname from `API_HOST`, so no environment has a URL baked into source.
 
-The cron job matters more than it looks: without it, snapshots only exist for moments when
-somebody had the page open. Steps are in [DEPLOY.md](DEPLOY.md).
+`PostgresConnection` recognises a transaction-mode pooler (port 6543 or `pgbouncer=true`)
+and switches PDO to client-side prepared statements, since a pooled connection can hand
+consecutive statements to different backends.
+
+The schedule matters more than it looks: without it, snapshots would only exist for moments
+when somebody had the page open, and the free instance would sleep between visits. Steps
+are in [DEPLOY.md](DEPLOY.md).
 
 ## Persistence
 
