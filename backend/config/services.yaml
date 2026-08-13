@@ -28,3 +28,7 @@ services:
     App\Model\LogSource:
         alias: App\Adapter\Logs\RenderLogSource
         public: false
+
+    App\Model\AlertChannel:
+        alias: App\Adapter\Alerting\ResendAlertChannel
+        public: false

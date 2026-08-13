@@ -18,6 +18,7 @@ final class RecordHealthSnapshot
         private readonly ProjectRepository $projects,
         private readonly HealthProbe $probe,
         private readonly HealthSnapshotStore $snapshots,
+        private readonly AnnounceHealthChange $announce,
     ) {
     }
 
@@ -78,6 +79,9 @@ final class RecordHealthSnapshot
         ];
 
         foreach ($snapshots as $snapshot) {
+            // Announced before the write, so the comparison reads history without the row
+            // that is about to join it.
+            $this->announce->forNewSnapshot($project, $snapshot);
             $this->snapshots->record($snapshot);
         }
 

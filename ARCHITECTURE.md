@@ -54,6 +54,7 @@ flowchart TB
 - Accept metric batches from game backends (`X-Ingest-Token`)
 - Show a fleet board plus a project detail page
 - Read the target's host logs beside its probe history
+- Mail the operator when a target changes state
 
 Management controls (kill-switch, provider routing, Unreal remote) are out of scope.
 
@@ -77,6 +78,22 @@ can be refused over traffic that belongs to strangers. The same URL answers `200
 home connection at the same moment. Recording that as `error` would blame the game for
 someone else's noise, so the probe backs off, retries once, and otherwise records who
 refused it.
+
+## Alerts
+
+`AlertChannel` is a port; `ResendAlertChannel` posts to an HTTPS API rather than speaking SMTP,
+because Render blocks ports 25, 465 and 587 on free web services. `AnnounceHealthChange` holds
+the decision of what deserves a message, and it runs before the snapshot is written so the
+comparison reads history without the row about to join it.
+
+The rule is that only conclusive transitions are announced. `throttled` and `timeout` say the
+probe could not see the target, so they are skipped entirely: they neither raise an alarm nor
+close one, and a recovery still measures the outage from the last real failure. Without that
+distinction a sleeping free instance would page an operator every hour and then congratulate
+them when it woke up.
+
+A channel that throws is logged and swallowed. The snapshot is the record that matters, and a
+mail provider having a bad afternoon must not turn a poll into a failure.
 
 ## Logs
 

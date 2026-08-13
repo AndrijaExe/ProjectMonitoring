@@ -124,6 +124,35 @@ Supabase logs are deliberately not wired up: their free tier keeps one day of Po
 behind a separate management token, and the database is quiet enough that the probe history
 already tells that story.
 
+## 6. Email alerts (optional)
+
+Without this the console only helps while somebody is looking at it. With it, a fall from
+healthy to broken arrives as mail, and so does the recovery, with the outage duration.
+
+1. Create an account at [resend.com](https://resend.com) and an API key.
+2. On `monitoring-api` > Environment add `RESEND_API_KEY` and `ALERT_EMAIL_TO` (your
+   address). Leave `ALERT_EMAIL_FROM` as `onboarding@resend.dev` until you own a domain —
+   that sender only delivers to the address the Resend account was registered with, which
+   is exactly the case here.
+
+**This goes over HTTPS, not SMTP, and that is not a preference.** Since September 2025 Render
+blocks outbound traffic to ports 25, 465 and 587 on free web services, so a normal mailer
+would work on your laptop and time out in production, with nothing in the logs to explain it.
+Port 443 is open on every plan.
+
+What triggers a message:
+
+- Only transitions. A target that has been down for a day produces one mail, not one an hour.
+- Only conclusive readings. `throttled` and `timeout` mean the probe could not see the target,
+  which is what a sleeping free instance looks like, so they neither raise an alarm nor count
+  as a recovery. An outage that began before we went blind is still measured from the real
+  failure.
+- The first ever reading, if it is bad. A monitor that stays silent because it has no history
+  is useless on the day you set it up.
+
+Alert delivery never fails a poll. If Resend is unreachable the snapshot is still recorded and
+a warning goes to the service log.
+
 ## Free tier limits worth knowing
 
 - The API sleeps after 15 minutes without traffic and takes close to a minute to wake. The

@@ -85,6 +85,10 @@ Setting `RENDER_API_KEY` adds a log panel to each project page, reading the targ
 logs through the API so a failing probe and its cause sit on one screen. It is optional and
 the key never leaves the server; see [DEPLOY.md](DEPLOY.md).
 
+Setting `RESEND_API_KEY` and `ALERT_EMAIL_TO` turns state changes into email, so the board
+stops being something you have to remember to open. Only transitions are sent, and readings
+that mean "could not see the target" are never treated as either failure or recovery.
+
 ## Add another game later
 
 Extend `ProjectCatalogSeeder` (or insert a row into `projects`) with `game_id`, health/ready URLs, and an ingest token hash. The dashboard and ingest API are already keyed by `game_id`.
