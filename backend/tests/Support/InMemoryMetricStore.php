@@ -40,6 +40,10 @@ final class InMemoryMetricStore implements MetricStore
             $first = $samples[0];
             $last = $samples[count($samples) - 1];
 
+            if (($first->tags['kind'] ?? '') === 'gauge') {
+                continue;
+            }
+
             if (($first->tags['kind'] ?? '') === 'counter') {
                 // Cumulative readings grow; the window total is the growth, not the sum,
                 // measured from wherever the counter stood when the window opened.
@@ -59,6 +63,29 @@ final class InMemoryMetricStore implements MetricStore
         ksort($totals);
 
         return $totals;
+    }
+
+    public function latestGauges(GameId $gameId, \DateTimeImmutable $since): array
+    {
+        $gauges = [];
+        foreach ($this->since($gameId, $since) as $sample) {
+            if (($sample->tags['kind'] ?? '') !== 'gauge') {
+                continue;
+            }
+
+            $known = $gauges[$sample->name] ?? null;
+            if ($known === null || $sample->recordedAt >= $known->recordedAt) {
+                $gauges[$sample->name] = $sample;
+            }
+        }
+
+        $latest = [];
+        foreach ($gauges as $name => $sample) {
+            $latest[$name] = $sample->value;
+        }
+        ksort($latest);
+
+        return $latest;
     }
 
     public function recent(GameId $gameId, int $limit = 50): array

@@ -8,6 +8,7 @@ use App\Application\CollectGameMetrics;
 use App\Model\GameId;
 use App\Model\IngestToken;
 use App\Model\Project;
+use App\Tests\Support\CollectingLogger;
 use App\Tests\Support\FakeGameMetricSource;
 use App\Tests\Support\InMemoryMetricStore;
 use PHPUnit\Framework\TestCase;
@@ -73,6 +74,57 @@ final class CollectGameMetricsTest extends TestCase
 
         $totals = $store->totalsSince(GameId::fromString('loop9'), new \DateTimeImmutable('2026-08-13T00:00:00+00:00'));
         self::assertSame(12.0, $totals['chat.messages']);
+    }
+
+    public function testAGaugeIsReadAsItsLatestValueAndNeverSummed(): void
+    {
+        $store = new InMemoryMetricStore();
+        $source = new FakeGameMetricSource();
+        $collector = $this->collector($source, $store);
+        $project = $this->project();
+
+        $source->willReturn([], ['players.online' => 4.0]);
+        $collector->forProject($project, new \DateTimeImmutable('2026-08-13T09:00:00+00:00'));
+
+        $source->willReturn([], ['players.online' => 7.0]);
+        $collector->forProject($project, new \DateTimeImmutable('2026-08-13T10:00:00+00:00'));
+
+        $since = new \DateTimeImmutable('2026-08-13T00:00:00+00:00');
+        $gameId = GameId::fromString('loop9');
+
+        // Eleven players online would be a lie told by addition.
+        self::assertSame(['players.online' => 7.0], $store->latestGauges($gameId, $since));
+        // And a level has no place among the day's totals at all.
+        self::assertSame([], $store->totalsSince($gameId, $since));
+    }
+
+    public function testAnAnswerWithNothingInItIsSaidOutLoud(): void
+    {
+        $logger = new CollectingLogger();
+        $source = new FakeGameMetricSource();
+        $source->willReturn([], []);
+
+        $collected = (new CollectGameMetrics($source, new InMemoryMetricStore(), $logger))
+            ->forProject($this->project(), new \DateTimeImmutable());
+
+        // Otherwise a game counting nothing looks exactly like a reading that never happened.
+        self::assertSame(0, $collected);
+        self::assertContains('Game published no counters yet.', $logger->messages);
+    }
+
+    public function testCountingInMemoryIsReportedAsAProblemWithTheNumbers(): void
+    {
+        $logger = new CollectingLogger();
+        $source = new FakeGameMetricSource();
+        $source->willReturn(['chat.messages' => 3.0], [], 'memory');
+
+        (new CollectGameMetrics($source, new InMemoryMetricStore(), $logger))
+            ->forProject($this->project(), new \DateTimeImmutable());
+
+        self::assertContains(
+            'Game counts in memory, so its numbers reset on every restart.',
+            $logger->messages,
+        );
     }
 
     private function collector(FakeGameMetricSource $source, InMemoryMetricStore $store): CollectGameMetrics

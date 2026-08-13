@@ -349,6 +349,15 @@ td {
   padding: 0;
 }
 
+.split h3 {
+  margin: 1.2rem 0 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .totals li {
   display: flex;
   justify-content: space-between;

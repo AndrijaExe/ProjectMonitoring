@@ -63,7 +63,9 @@ final class PdoMetricStore implements MetricStore
                     (array_agg(value ORDER BY recorded_at ASC, id ASC))[1] AS first_value,
                     (array_agg(value ORDER BY recorded_at DESC, id DESC))[1] AS last_value
                 FROM metric_samples
-                WHERE game_id = :game_id AND recorded_at >= :since
+                WHERE game_id = :game_id
+                  AND recorded_at >= :since
+                  AND COALESCE(tags ->> 'kind', '') <> 'gauge'
                 GROUP BY name
             ),
             before AS (
@@ -90,6 +92,29 @@ final class PdoMetricStore implements MetricStore
         }
 
         return $totals;
+    }
+
+    public function latestGauges(GameId $gameId, \DateTimeImmutable $since): array
+    {
+        $statement = $this->connection->pdo()->prepare(<<<'SQL'
+            SELECT DISTINCT ON (name) name, value
+            FROM metric_samples
+            WHERE game_id = :game_id
+              AND recorded_at >= :since
+              AND tags ->> 'kind' = 'gauge'
+            ORDER BY name, recorded_at DESC, id DESC
+            SQL);
+        $statement->execute([
+            'game_id' => $gameId->value,
+            'since' => $since->format(\DateTimeInterface::ATOM),
+        ]);
+
+        $gauges = [];
+        foreach ($statement->fetchAll() as $row) {
+            $gauges[(string) $row['name']] = (float) $row['value'];
+        }
+
+        return $gauges;
     }
 
     /**

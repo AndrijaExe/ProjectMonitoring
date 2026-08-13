@@ -13,9 +13,7 @@ namespace App\Model;
 interface GameMetricSource
 {
     /**
-     * @return array<string, float> cumulative counts, newest reading
-     *
      * @throws MetricsUnavailable
      */
-    public function read(Project $project): array;
+    public function read(Project $project): GameReading;
 }

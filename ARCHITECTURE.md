@@ -156,8 +156,17 @@ seen inside the window reports zero rather than claiming its lifetime total happ
 reading lower than its baseline means the game's counter store was cleared, and the newest
 reading is then the whole of what has been counted since.
 
+Not every number is a total. Players online is a level: it is true at the moment it was read and
+means nothing added up, so a gauge is stored with `kind=gauge`, kept out of the day's totals, and
+shown as its newest reading with the time it was taken. Eleven is not the answer to four players
+at nine and seven at ten.
+
 A game that will not answer is logged and skipped. The probe already said whether it is up, and
-a missing counter reading is a gap in the numbers, not an incident.
+a missing counter reading is a gap in the numbers, not an incident. An answer with nothing in it
+is logged too: a game that has counted nothing and a reading that never happened both show an
+empty panel, and only the log tells them apart. The same goes for a game counting into memory
+rather than Redis, which it reports in the payload — numbers that die with the process produce a
+board of zeros that looks exactly like a quiet day.
 
 ## Deleting history
 

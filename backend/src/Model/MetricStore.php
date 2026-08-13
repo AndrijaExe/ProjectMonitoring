@@ -11,9 +11,18 @@ interface MetricStore
     public function countSince(GameId $gameId, \DateTimeImmutable $since): int;
 
     /**
+     * Counters and pushed events only. A gauge has no window total worth printing.
+     *
      * @return array<string, float>
      */
     public function totalsSince(GameId $gameId, \DateTimeImmutable $since): array;
+
+    /**
+     * The newest value of each gauge, which is the only value a level has.
+     *
+     * @return array<string, float>
+     */
+    public function latestGauges(GameId $gameId, \DateTimeImmutable $since): array;
 
     /**
      * @return list<MetricSample>

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Adapter\Metrics;
 
 use App\Model\GameMetricSource;
+use App\Model\GameReading;
 use App\Model\MetricSample;
 use App\Model\MetricsUnavailable;
 use App\Model\Project;
@@ -29,7 +30,7 @@ final class HttpGameMetricSource implements GameMetricSource
     ) {
     }
 
-    public function read(Project $project): array
+    public function read(Project $project): GameReading
     {
         $url = $project->metricsUrl;
         if ($url === null) {
@@ -68,7 +69,15 @@ final class HttpGameMetricSource implements GameMetricSource
             throw new MetricsUnavailable('The answer had no "counters" object.');
         }
 
-        return $this->clean($counters);
+        // Gauges are newer than the first version of this contract, so a game that publishes
+        // only counters is still a valid answer rather than a broken one.
+        $gauges = $payload['gauges'] ?? [];
+
+        return new GameReading(
+            $this->clean($counters),
+            is_array($gauges) ? $this->clean($gauges) : [],
+            is_string($payload['storage'] ?? null) ? $payload['storage'] : '',
+        );
     }
 
     /**

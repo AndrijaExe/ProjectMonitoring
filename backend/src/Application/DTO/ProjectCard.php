@@ -8,6 +8,7 @@ final readonly class ProjectCard
 {
     /**
      * @param array<string, float> $recentMetricTotals
+     * @param array<string, float> $gauges
      */
     public function __construct(
         public string $gameId,
@@ -24,6 +25,7 @@ final readonly class ProjectCard
         public ?string $readyCheckedAt,
         public int $recentMetricCount,
         public array $recentMetricTotals,
+        public array $gauges = [],
     ) {
     }
 
@@ -53,6 +55,8 @@ final readonly class ProjectCard
                 'count_24h' => $this->recentMetricCount,
                 // Cast keeps the JSON shape an object even when no metric arrived yet.
                 'totals_24h' => (object) $this->recentMetricTotals,
+                // Levels, not totals: the newest reading of each, or nothing at all.
+                'gauges' => (object) $this->gauges,
             ],
         ];
     }

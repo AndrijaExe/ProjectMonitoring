@@ -48,6 +48,8 @@ export function ProjectPage() {
   }
 
   const card = data.project
+  const gauges = Object.entries(card.metrics.gauges ?? {})
+  const lastReadingAt = data.recent_metrics[0]?.recorded_at ?? null
 
   return (
     <Shell
@@ -90,6 +92,12 @@ export function ProjectPage() {
       <div className="chips page-chips">
         <StatusChip label="health" status={card.health.status} />
         <StatusChip label="ready" status={card.ready.status} />
+        {card.metrics.gauges?.['players.online'] != null ? (
+          <span className="chip chip-unseen">
+            <span className="chip-label">players online</span>
+            {card.metrics.gauges['players.online']}
+          </span>
+        ) : null}
         <span className="chip chip-unseen">
           <span className="chip-label">readings 24h</span>
           {card.metrics.count_24h}
@@ -137,20 +145,39 @@ export function ProjectPage() {
           />
         </article>
         <article>
-          <h2>Counters, last 24h</h2>
+          <h2>Game numbers</h2>
+          {gauges.length > 0 ? (
+            <>
+              <h3>Right now</h3>
+              <ul className="totals">
+                {gauges.map(([name, value]) => (
+                  <li key={name}>
+                    <span>{name}</span>
+                    <span className="mono">{value}</span>
+                  </li>
+                ))}
+              </ul>
+              {/* A level is only as true as the moment it was read. */}
+              <p className="meta">read {formatCheckedAt(lastReadingAt)}</p>
+            </>
+          ) : null}
           {Object.keys(card.metrics.totals_24h).length > 0 ? (
-            <ul className="totals">
-              {Object.entries(card.metrics.totals_24h).map(([name, total]) => (
-                <li key={name}>
-                  <span>{name}</span>
-                  <span className="mono">{total}</span>
-                </li>
-              ))}
-            </ul>
+            <>
+              <h3>Last 24h</h3>
+              <ul className="totals">
+                {Object.entries(card.metrics.totals_24h).map(([name, total]) => (
+                  <li key={name}>
+                    <span>{name}</span>
+                    <span className="mono">{total}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
           ) : null}
           {data.recent_metrics.length === 0 ? (
             <p className="empty">
-              No readings yet. Counters are read from the game each time a poll finds it up.
+              Nothing counted yet. The game counts what players do — messages, logins, finished
+              runs, errors — so these stay empty until somebody plays.
             </p>
           ) : (
             <table>

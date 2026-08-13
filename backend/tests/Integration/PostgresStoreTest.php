@@ -171,6 +171,25 @@ final class PostgresStoreTest extends TestCase
         );
     }
 
+    public function testAGaugeReportsItsNewestValueAndStaysOutOfTheTotals(): void
+    {
+        $store = new PdoMetricStore(TestDatabase::connection());
+        $now = new \DateTimeImmutable();
+        $gauge = ['kind' => 'gauge'];
+
+        $store->recordBatch(new MetricBatch([
+            new MetricSample($this->loop9, 'players.online', 12.0, $gauge, $now->modify('-2 hours')),
+            new MetricSample($this->loop9, 'players.online', 5.0, $gauge, $now),
+            new MetricSample($this->loop9, 'chat.messages', 30.0, ['kind' => 'counter'], $now),
+        ]));
+
+        $since = $now->modify('-24 hours');
+
+        // Seventeen players online never happened; five is the answer, and the only one.
+        self::assertSame(['players.online' => 5.0], $store->latestGauges($this->loop9, $since));
+        self::assertArrayNotHasKey('players.online', $store->totalsSince($this->loop9, $since));
+    }
+
     public function testRecentMetricsKeepTagsAndOrder(): void
     {
         $store = new PdoMetricStore(TestDatabase::connection());

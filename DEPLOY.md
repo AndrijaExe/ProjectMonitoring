@@ -180,14 +180,24 @@ at `GET /metrics`, and the monitor reads them each time a poll finds the game up
 Without the token the game's endpoint returns 404 and the console shows probes only, which is
 what it did before. Nothing else breaks.
 
-Two things to expect the first day:
+Three things to expect the first day:
 
+- **An empty panel is the normal state of a game nobody is playing.** The counts are of what
+  players do: messages sent, logins, finished runs, errors. Probes are not players, so polling
+  a healthy game all day adds nothing to them. `players online` appears next to the probe chips
+  once somebody is in.
 - **The first reading shows zeros.** Counters are lifetime totals, so "last 24 hours" is the
   difference between two readings and there is only one until the next poll. Growth appears
   from the second poll on.
 - **A number can drop.** The game keeps its counters in Redis; if that key is lost the count
   restarts, and the console reads the new reading as everything counted since. It means the
   counter store was cleared, not that the game un-happened.
+
+**`REDIS_URL` has to be set on Loop 9 for any of this to hold.** Without it the game counts in
+the memory of one request, which is to say it does not count: every reading comes back empty and
+players online stays at zero however many people are playing. The game reports which store it is
+using, and the monitor writes a warning into its own log — visible under **Monitor logs** on the
+fleet page — whenever the answer is memory.
 
 Counters are read only when the health probe just came back `ok`. Asking a sleeping instance
 would spend the timeout budget again to learn what the probe already reported, and with hourly

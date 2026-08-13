@@ -25,6 +25,8 @@ export type ProjectCard = {
   metrics: {
     count_24h: number
     totals_24h: Record<string, number>
+    /** Levels at the last reading, such as players online. Never summed over the day. */
+    gauges: Record<string, number>
   }
 }
 

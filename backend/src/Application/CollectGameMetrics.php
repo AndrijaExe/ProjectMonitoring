@@ -35,7 +35,7 @@ final class CollectGameMetrics
         }
 
         try {
-            $counters = $this->source->read($project);
+            $reading = $this->source->read($project);
         } catch (MetricsUnavailable $exception) {
             // A game that will not report its counters is not an outage. The probe already
             // said whether it is up, and that is the part the operator is paged about.
@@ -47,12 +47,30 @@ final class CollectGameMetrics
             return 0;
         }
 
+        if ($reading->storage === 'memory') {
+            // Counts that die with the process are not counts. Said out loud, because the
+            // symptom is a board of zeros that looks exactly like a quiet day.
+            $this->logger->warning('Game counts in memory, so its numbers reset on every restart.', [
+                'game_id' => $project->gameId->value,
+            ]);
+        }
+
         $samples = [];
-        foreach ($counters as $name => $value) {
+        foreach ($reading->counters as $name => $value) {
             $samples[] = new MetricSample($project->gameId, $name, $value, ['kind' => 'counter'], $now);
         }
 
+        foreach ($reading->gauges as $name => $value) {
+            $samples[] = new MetricSample($project->gameId, $name, $value, ['kind' => 'gauge'], $now);
+        }
+
         if ($samples === []) {
+            // Answered, but with nothing in it. Without this line the console cannot tell a
+            // game that has counted nothing from a reading that never happened.
+            $this->logger->info('Game published no counters yet.', [
+                'game_id' => $project->gameId->value,
+            ]);
+
             return 0;
         }
 

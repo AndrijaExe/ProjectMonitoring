@@ -56,6 +56,7 @@ final class GetMonitoringOverview
             readyCheckedAt: $this->formatTime($ready),
             recentMetricCount: $this->metrics->countSince($project->gameId, $since),
             recentMetricTotals: $this->metrics->totalsSince($project->gameId, $since),
+            gauges: $this->metrics->latestGauges($project->gameId, $since),
         );
     }
 
