@@ -4,6 +4,7 @@ import { LogPanel } from '../components/LogPanel'
 import { StatusChip } from '../components/StatusChip'
 import { Shell } from '../components/Shell'
 import { formatCheckedAt } from '../formatTime'
+import { useStatusUpdate } from '../useStatusUpdate'
 
 export function ProjectPage() {
   const { gameId = '' } = useParams()
@@ -11,7 +12,8 @@ export function ProjectPage() {
     skip: gameId === '',
     pollingInterval: 30_000,
   })
-  const [pollProject, pollState] = usePollProjectMutation()
+  const [pollProject] = usePollProjectMutation()
+  const status = useStatusUpdate(() => pollProject(gameId))
 
   if (isLoading) {
     return (
@@ -51,12 +53,8 @@ export function ProjectPage() {
       title={card.display_name}
       lede={`Health ${card.health.status ?? 'unseen'}${card.health.latency_ms != null ? ` in ${card.health.latency_ms}ms` : ''}. Ready ${card.ready.status ?? 'unseen'}${card.ready.latency_ms != null ? ` in ${card.ready.latency_ms}ms` : ''}.`}
       action={
-        <button
-          type="button"
-          disabled={pollState.isLoading}
-          onClick={() => void pollProject(card.game_id)}
-        >
-          {pollState.isLoading ? 'Updating…' : 'Update status'}
+        <button type="button" disabled={status.busy} onClick={() => void status.update([card.health_url])}>
+          {status.label}
         </button>
       }
     >

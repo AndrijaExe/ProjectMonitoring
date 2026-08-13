@@ -153,6 +153,11 @@ What triggers a message:
 Alert delivery never fails a poll. If Resend is unreachable the snapshot is still recorded and
 a warning goes to the service log.
 
+The **Update status** button wakes the targets from your browser before the API probes them,
+so a manual check during the 45 minutes a free target spends asleep between hourly runs reads
+the game rather than the edge. That is why the button says "Waking…" first and can take most
+of a minute.
+
 Press **Test alert** on the fleet page once after setting this up. It sends a mail marked
 `[test]` through the same code path a real alarm uses and reports back what Resend said, which
 is the only way to learn that the setup works on a day when nothing is broken. Free instances

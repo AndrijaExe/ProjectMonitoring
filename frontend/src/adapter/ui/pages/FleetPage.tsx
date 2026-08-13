@@ -8,13 +8,15 @@ import {
 import { StatusChip } from '../components/StatusChip'
 import { Shell } from '../components/Shell'
 import { formatCheckedAt } from '../formatTime'
+import { useStatusUpdate } from '../useStatusUpdate'
 
 export function FleetPage() {
   const { data, isLoading, isError, refetch } = useGetOverviewQuery(undefined, {
     pollingInterval: 30_000,
   })
-  const [pollAll, pollState] = usePollAllMutation()
+  const [pollAll] = usePollAllMutation()
   const [sendTestAlert, alertState] = useSendTestAlertMutation()
+  const status = useStatusUpdate(pollAll)
 
   return (
     <Shell
@@ -31,8 +33,12 @@ export function FleetPage() {
           >
             {alertState.isLoading ? 'Sending…' : 'Test alert'}
           </button>
-          <button type="button" disabled={pollState.isLoading} onClick={() => void pollAll()}>
-            {pollState.isLoading ? 'Updating…' : 'Update status'}
+          <button
+            type="button"
+            disabled={status.busy}
+            onClick={() => void status.update((data?.projects ?? []).map((p) => p.health_url))}
+          >
+            {status.label}
           </button>
         </div>
       }

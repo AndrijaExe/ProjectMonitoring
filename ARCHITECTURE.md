@@ -72,6 +72,13 @@ Management controls (kill-switch, provider routing, Unreal remote) are out of sc
 
 Free hosting tiers drop the request that wakes them, so a timeout is retried once before it is recorded. `PROBE_TIMEOUT_SECONDS` (default 20) sets the budget per attempt.
 
+One consequence is worth spelling out, because it shaped the console. A sleeping free Render
+service cannot be woken by another Render service: the edge refuses the request that would
+have started it. So the monitor, sitting on Render, can never wake what it watches. Both the
+scheduled run and the Update status button therefore knock first from somewhere else — a
+GitHub runner for the schedule, the operator's own browser for the button — and only then ask
+the API to measure. Probing without that step reports the network, not the game.
+
 The `throttled` case is not hypothetical. Render sends outbound traffic through IP ranges
 shared by every service in a region, and targets behind a CDN rate limit by IP, so a probe
 can be refused over traffic that belongs to strangers. The same URL answers `200` from a
