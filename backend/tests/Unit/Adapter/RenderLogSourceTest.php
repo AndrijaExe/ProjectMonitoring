@@ -126,6 +126,56 @@ final class RenderLogSourceTest extends TestCase
         self::assertSame('==> Your service is live', $lines[0]->message);
     }
 
+    public function testThePlatformsOwnHealthProbesAreLeftOutAndCounted(): void
+    {
+        $client = $this->clientReturning([
+            $this->entry('10.231.26.214 - - [13/Aug/2026:12:53:16 +0000] "GET /healthz HTTP/1.1" 200 252 "-" "Render/1.0"', '2026-08-13T12:53:16+00:00'),
+            $this->entry('::1 - - [13/Aug/2026:12:53:11 +0000] "GET /api/v1/overview HTTP/1.1" 200 5202 "https://monitoring-console.onrender.com/" "Mozilla/5.0"', '2026-08-13T12:53:11+00:00'),
+            $this->entry('10.231.26.214 - - [13/Aug/2026:12:53:06 +0000] "GET /healthz HTTP/1.1" 200 252 "-" "Render/1.0"', '2026-08-13T12:53:06+00:00'),
+        ]);
+
+        $page = (new RenderLogSource($client, new ArrayAdapter(), 'rnd_key'))
+            ->recent($this->project(), new LogFilter());
+
+        // Render probes the health path every few seconds, so left in they would be the only
+        // thing a hundred lines could hold.
+        self::assertCount(1, $page->lines);
+        self::assertStringContainsString('/api/v1/overview', $page->lines[0]->message);
+        self::assertSame(2, $page->routine);
+        self::assertSame('2 routine platform health checks hidden.', $page->note());
+    }
+
+    public function testAWindowOfNothingButProbesSaysSoRatherThanLookingEmpty(): void
+    {
+        $client = $this->clientReturning([
+            $this->entry('10.231.26.214 - - [13/Aug/2026:12:53:16 +0000] "GET /healthz HTTP/1.1" 200 252 "-" "Render/1.0"', '2026-08-13T12:53:16+00:00'),
+        ]);
+
+        $page = (new RenderLogSource($client, new ArrayAdapter(), 'rnd_key'))
+            ->recent($this->project(), new LogFilter());
+
+        // "Nothing here" and "nothing worth showing here" are different answers, and only one
+        // of them tells the reader the pipe is working.
+        self::assertSame([], $page->lines);
+        self::assertSame('Nothing but 1 routine platform health check in this window.', $page->note());
+    }
+
+    /**
+     * @param list<array<string, mixed>> $logs
+     */
+    private function clientReturning(array $logs): MockHttpClient
+    {
+        return new MockHttpClient(function (string $method, string $url) use ($logs): MockResponse {
+            if (str_contains($url, '/services')) {
+                return new MockResponse(json_encode([
+                    ['service' => ['id' => 'srv-123', 'ownerId' => 'tea-9', 'name' => 'loop9-backend']],
+                ]));
+            }
+
+            return new MockResponse(json_encode(['logs' => $logs]));
+        });
+    }
+
     public function testTheMonitorReadsOnlyItsOwnServiceWhenLookingAtItself(): void
     {
         $requests = [];

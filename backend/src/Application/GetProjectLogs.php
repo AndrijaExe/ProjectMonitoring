@@ -54,7 +54,7 @@ final class GetProjectLogs
             'configured' => true,
             'source' => $page->source,
             'lines' => array_map(static fn ($line): array => $line->toArray(), $page->lines),
-            'note' => null,
+            'note' => $page->note(),
         ];
     }
 }

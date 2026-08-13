@@ -149,6 +149,13 @@ A page of lines carries the name of the service that wrote them, and the newest 
 Render answers in its own order and does not promise one, and an unattributed panel of log
 output next to a second panel of log output is an invitation to read the wrong one.
 
+One kind of line is dropped: Render probes every service's health check path every few seconds
+and the web server logs each probe, which comes to roughly eight hundred lines an hour. A panel
+holding the newest hundred would therefore hold nothing else, and a warning the application
+actually wrote — counters falling back to memory, a history being cleared — could never appear
+in it. The panel says how many it left out rather than dropping them silently, because a viewer
+that quietly disagrees with the host's own log page teaches its reader to distrust it.
+
 ## Game counters
 
 A probe answers whether the web server replied. It cannot say whether players are getting

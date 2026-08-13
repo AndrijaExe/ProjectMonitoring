@@ -98,20 +98,38 @@ final class RenderLogSource implements LogSource
 
         $payload = $this->get('/logs', $query);
         $lines = [];
+        $routine = 0;
 
         foreach ($payload['logs'] ?? [] as $entry) {
             if (!is_array($entry)) {
                 continue;
             }
 
-            $lines[] = $this->toLine($entry);
+            $line = $this->toLine($entry);
+            if ($this->isPlatformProbe($line->message)) {
+                ++$routine;
+                continue;
+            }
+
+            $lines[] = $line;
         }
 
         // Render does not promise an order and has answered oldest first, which buries the
         // line that made someone open the panel under a screen of routine ones.
         usort($lines, static fn (LogLine $a, LogLine $b): int => $b->at <=> $a->at);
 
-        return new LogPage($service['name'], $lines);
+        return new LogPage($service['name'], $lines, $routine);
+    }
+
+    /**
+     * Render probes every service's health check path every few seconds, and the web server
+     * writes a line for each one. At that rate they are the only thing a panel of the newest
+     * hundred lines can show, so a warning the application actually wrote would never be
+     * visible. The host's own log page still has them; this panel exists to show the rest.
+     */
+    private function isPlatformProbe(string $message): bool
+    {
+        return preg_match('/"Render\/[\d.]+"\s*$/', $message) === 1;
     }
 
     /**

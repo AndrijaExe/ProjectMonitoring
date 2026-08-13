@@ -14,11 +14,30 @@ namespace App\Model;
 final readonly class LogPage
 {
     /**
-     * @param list<LogLine> $lines newest first
+     * @param list<LogLine> $lines   newest first
+     * @param int           $routine lines dropped as platform bookkeeping
      */
     public function __construct(
         public string $source,
         public array $lines,
+        public int $routine = 0,
     ) {
+    }
+
+    /**
+     * Says what was left out, because a viewer that quietly disagrees with the host's own log
+     * page teaches its reader to distrust it.
+     */
+    public function note(): ?string
+    {
+        if ($this->routine === 0) {
+            return null;
+        }
+
+        $checks = sprintf('%d routine platform health check%s', $this->routine, $this->routine === 1 ? '' : 's');
+
+        return $this->lines === []
+            ? sprintf('Nothing but %s in this window.', $checks)
+            : sprintf('%s hidden.', ucfirst($checks));
     }
 }
