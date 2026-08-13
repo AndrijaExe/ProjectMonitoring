@@ -107,7 +107,9 @@ final class AnnounceMetricAlarms
         if ($this->hasGoneQuiet($project, $now)) {
             $alerts[] = new MetricAlert($project, 'quiet', 'nothing has been counted for a day', [
                 'The game was counting events the day before and has counted none since.',
-                'The service may still be answering probes normally, with nothing reaching it.',
+                // Both causes look identical from here: an empty window is an empty window
+                // whether nothing happened or nothing was read. Naming both saves an hour.
+                'Either nothing is reaching the game, or its counters stopped being read at all.',
             ]);
         }
 
