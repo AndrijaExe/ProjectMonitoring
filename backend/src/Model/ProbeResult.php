@@ -54,4 +54,13 @@ final readonly class ProbeResult
     {
         return new self(HealthStatus::Timeout, 0, $latencyMs, $error);
     }
+
+    /**
+     * A proxy that refuses to forward the probe tells us nothing about the target behind it.
+     * Recording that as an error would blame the game for someone else's rate limit.
+     */
+    public static function throttled(int $httpCode, int $latencyMs, string $error): self
+    {
+        return new self(HealthStatus::Throttled, $httpCode, $latencyMs, $error);
+    }
 }

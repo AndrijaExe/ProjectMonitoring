@@ -11,6 +11,7 @@ const LABELS: Record<HealthStatus, string> = {
   not_ready: 'not ready',
   down: 'down',
   timeout: 'timeout',
+  throttled: 'throttled',
   error: 'error',
   unseen: 'unseen',
 }

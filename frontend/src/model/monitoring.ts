@@ -4,6 +4,7 @@ export type HealthStatus =
   | 'not_ready'
   | 'down'
   | 'timeout'
+  | 'throttled'
   | 'error'
   | 'unseen'
 
@@ -60,6 +61,7 @@ export function displayStatus(status: string | null | undefined): HealthStatus {
     status === 'not_ready' ||
     status === 'down' ||
     status === 'timeout' ||
+    status === 'throttled' ||
     status === 'error'
   ) {
     return status

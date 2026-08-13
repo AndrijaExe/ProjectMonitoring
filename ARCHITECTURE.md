@@ -58,7 +58,7 @@ Management controls (kill-switch, provider routing, Unreal remote) are out of sc
 
 ## Probes
 
-`HttpHealthProbe` separates three outcomes, because treating them alike makes the console lie:
+`HttpHealthProbe` keeps these outcomes apart, because treating them alike makes the console lie:
 
 | Outcome | Status | Meaning |
 |---|---|---|
@@ -66,8 +66,16 @@ Management controls (kill-switch, provider routing, Unreal remote) are out of sc
 | Answered wrong | `error` / `not_ready` | Target is up but unhappy |
 | Refused, DNS failure | `down` | Target is unreachable, reason kept in the snapshot |
 | No answer in time, twice | `timeout` | Probably asleep, not confirmed dead |
+| `429` twice | `throttled` | Something in front of the target refused us; the target is unjudged |
 
 Free hosting tiers drop the request that wakes them, so a timeout is retried once before it is recorded. `PROBE_TIMEOUT_SECONDS` (default 20) sets the budget per attempt.
+
+The `throttled` case is not hypothetical. Render sends outbound traffic through IP ranges
+shared by every service in a region, and targets behind a CDN rate limit by IP, so a probe
+can be refused over traffic that belongs to strangers. The same URL answers `200` from a
+home connection at the same moment. Recording that as `error` would blame the game for
+someone else's noise, so the probe backs off, retries once, and otherwise records who
+refused it.
 
 ## Auth
 

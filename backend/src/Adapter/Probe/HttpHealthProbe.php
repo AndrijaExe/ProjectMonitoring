@@ -20,10 +20,19 @@ final class HttpHealthProbe implements HealthProbe
      */
     private const RETRIES_ON_TIMEOUT = 1;
 
+    /**
+     * Render routes outbound traffic through IP ranges shared by every service in a region,
+     * so a CDN in front of the target can throttle this probe over traffic that is not ours.
+     * A short pause often lands the retry in a fresh window.
+     */
+    private const RETRIES_ON_THROTTLE = 1;
+    private const TOO_MANY_REQUESTS = 429;
+
     public function __construct(
         private readonly HttpClientInterface $httpClient,
         #[Autowire('%env(float:PROBE_TIMEOUT_SECONDS)%')]
         private readonly float $timeoutSeconds = 15.0,
+        private readonly int $throttleBackoffSeconds = 2,
     ) {
     }
 
@@ -31,6 +40,7 @@ final class HttpHealthProbe implements HealthProbe
     {
         $started = hrtime(true);
         $attempts = 0;
+        $throttledAttempts = 0;
 
         while (true) {
             ++$attempts;
@@ -46,6 +56,7 @@ final class HttpHealthProbe implements HealthProbe
                 ]);
                 $httpCode = $response->getStatusCode();
                 $body = $response->getContent(false);
+                $headers = $response->getHeaders(false);
             } catch (TimeoutExceptionInterface) {
                 if ($attempts > self::RETRIES_ON_TIMEOUT) {
                     return ProbeResult::timedOut($this->elapsedMs($started), sprintf(
@@ -60,8 +71,46 @@ final class HttpHealthProbe implements HealthProbe
                 return ProbeResult::down($this->elapsedMs($started), $this->reason($exception));
             }
 
+            if ($httpCode === self::TOO_MANY_REQUESTS) {
+                ++$throttledAttempts;
+
+                if ($throttledAttempts <= self::RETRIES_ON_THROTTLE) {
+                    if ($this->throttleBackoffSeconds > 0) {
+                        sleep($this->throttleBackoffSeconds);
+                    }
+
+                    continue;
+                }
+
+                return ProbeResult::throttled(
+                    $httpCode,
+                    $this->elapsedMs($started),
+                    $this->throttleReason($headers, $throttledAttempts),
+                );
+            }
+
             return ProbeResult::fromHttp($endpoint, $httpCode, $this->elapsedMs($started), $this->jsonStatus($body));
         }
+    }
+
+    /**
+     * @param array<string, list<string>> $headers
+     */
+    private function throttleReason(array $headers, int $attempts): string
+    {
+        $reason = sprintf('Rate limited before reaching the target, %d attempts.', $attempts);
+
+        $by = $headers['server'][0] ?? null;
+        if (is_string($by) && $by !== '') {
+            $reason .= ' Refused by '.mb_substr($by, 0, 40).'.';
+        }
+
+        $retryAfter = $headers['retry-after'][0] ?? null;
+        if (is_string($retryAfter) && $retryAfter !== '') {
+            $reason .= ' Retry-After: '.mb_substr($retryAfter, 0, 20).'.';
+        }
+
+        return $reason;
     }
 
     private function jsonStatus(string $body): ?string

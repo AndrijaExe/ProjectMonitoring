@@ -11,6 +11,7 @@ enum HealthStatus: string
     case NotReady = 'not_ready';
     case Down = 'down';
     case Timeout = 'timeout';
+    case Throttled = 'throttled';
     case Error = 'error';
 
     public function isHealthy(): bool
