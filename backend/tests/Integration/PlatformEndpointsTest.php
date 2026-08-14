@@ -158,7 +158,7 @@ final class PlatformEndpointsTest extends WebTestCase
         self::assertStringContainsString('RENDER_API_KEY', (string) $payload['note']);
     }
 
-    public function testAnActionIsRefusedRatherThanAttemptedWhenNothingIsConfigured(): void
+    public function testARefusedActionDoesNotLookLikeADeadTokenToTheConsole(): void
     {
         $client = static::createClient();
         $client->request(
@@ -168,7 +168,10 @@ final class PlatformEndpointsTest extends WebTestCase
             content: json_encode(['action' => 'stop'], JSON_THROW_ON_ERROR),
         );
 
-        self::assertResponseStatusCodeSame(403);
+        // Anything but 403 or 401: the console ends its session on those, and being signed out
+        // while pressing a button is a worse answer than being told the switch is off.
+        self::assertResponseStatusCodeSame(409);
+        self::assertStringContainsString('RENDER_API_KEY', $client->getResponse()->getContent() ?: '');
     }
 
     public function testIngestRejectsBadToken(): void

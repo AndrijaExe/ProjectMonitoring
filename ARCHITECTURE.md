@@ -253,13 +253,23 @@ and the first should not silently grant the second. Every press writes two log l
 the call and one after the host accepts, because a trail with only the second line cannot explain
 an outage that began with the first.
 
+A refusal is answered with `409`, not `403`. The console ends its session on `401` and `403`,
+which is right when a token has been rotated and wrong for everything else: an operator pressing
+Stop and getting signed out would conclude the wrong thing about both. Those two statuses mean the
+credential, and any other refusal has to find another code.
+
 Run state is read from the host rather than inferred from probes, because probes cannot make the
 distinction that matters most here: a stopped service and a crashed one both fail every check, and
 only one of them is worth waking up for. The panel therefore says "stopped on purpose", "deploying
 now", or "the last deploy failed, so the previous build is what is running" — sentences an operator
-can act on, rather than a status word they have to decode. The host reports the pre-change state
-for a while after accepting an action, so the panel keeps asking instead of trusting the answer it
-got, quickly while a deploy is in flight and rarely once it settles.
+can act on, rather than a status word they have to decode.
+
+The host reports the pre-change state for a while after accepting an action, and that lag is the
+one thing the panel has to handle rather than display. It remembers what it asked for, keeps the
+buttons shut and says so until the host reports it, and gives up waiting after three quarters of a
+minute — a rebuild can finish between two reads. Re-enabling on the answer alone would offer a
+second rebuild over a state that is already stale, and the host rate limits these calls to ten a
+minute per service.
 
 Stopping is honest about its consequences rather than quiet about them. The confirmation says what
 the game loses — no logins, no chat, no telemetry — and that the probes will report it down and

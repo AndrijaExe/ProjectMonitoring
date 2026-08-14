@@ -37,6 +37,9 @@ const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> =
   extraOptions,
 ) => {
   const result = await rawBaseQuery(args, api, extraOptions)
+  // These two statuses are reserved for the token being unusable, because this is what happens
+  // when one arrives: the session ends. An endpoint refusing a request for any other reason has
+  // to say so with a different code, or it signs the operator out mid-incident.
   if (result.error && (result.error.status === 401 || result.error.status === 403)) {
     const url = typeof args === 'string' ? args : args.url
     if (!url.includes('/auth/login')) {

@@ -55,8 +55,11 @@ final class ServiceControlController
                     : $this->service->apply($gameId, $action),
             );
         } catch (ControlRefused $exception) {
-            // Not the caller's mistake and not a lost request: the deployment said no.
-            return new JsonResponse(['error' => $exception->getMessage()], 403);
+            // A conflict with how the deployment is configured, and deliberately not a 403: the
+            // console reads that status as "your admin token died" and signs itself out, which is
+            // the last thing an operator needs while pressing this button. The credential was
+            // fine; the switch is off.
+            return new JsonResponse(['error' => $exception->getMessage()], 409);
         } catch (RenderUnavailable $exception) {
             // The host refused or could not be reached. Nothing changed, and saying so beats a
             // generic failure that leaves the operator unsure whether the service is now down.

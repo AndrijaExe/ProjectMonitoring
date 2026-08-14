@@ -10,6 +10,20 @@ type Props = {
 
 const SETTLED_MS = 60_000
 const WATCHING_MS = 10_000
+/** How long to keep waiting for the host to admit a change before letting the buttons go again. */
+const PATIENCE_MS = 45_000
+
+/** Whether the host is finally reporting what was asked of it. */
+function landed(action: ServiceAction, state: ServiceState): boolean {
+  switch (action) {
+    case 'stop':
+      return state.stopped
+    case 'start':
+      return !state.stopped
+    case 'rebuild':
+      return state.busy
+  }
+}
 
 /**
  * The run state of the target's service, and the three buttons that change it.
@@ -27,17 +41,45 @@ export function ServicePanel({ gameId, displayName }: Props) {
     pollingInterval: pollMs,
   })
   const [control, result] = useControlServiceMutation()
+  // Accepted by the host, not yet visible in what it reports. Render answers these calls before
+  // the change takes effect, so without remembering the request the panel would re-enable the
+  // buttons over a state that is already out of date and invite the same press twice.
+  const [pending, setPending] = useState<ServiceAction | null>(null)
 
   const state = data?.state ?? null
+  const waiting = pending !== null
+
   useEffect(() => {
-    setPollMs(state?.busy === true ? WATCHING_MS : SETTLED_MS)
-  }, [state?.busy])
+    setPollMs(state?.busy === true || waiting ? WATCHING_MS : SETTLED_MS)
+  }, [state?.busy, waiting])
+
+  useEffect(() => {
+    if (pending !== null && state !== null && landed(pending, state)) {
+      setPending(null)
+    }
+  }, [pending, state])
+
+  useEffect(() => {
+    if (pending === null) {
+      return
+    }
+
+    // A rebuild can finish between two reads, and a host can simply never agree. Either way the
+    // panel gives up waiting rather than staying disabled for the rest of the day.
+    const timer = window.setTimeout(() => setPending(null), PATIENCE_MS)
+    return () => window.clearTimeout(timer)
+  }, [pending])
+
   const acting = result.isLoading
-  const canAct = (data?.enabled ?? false) && state != null && !acting
+  const canAct = (data?.enabled ?? false) && state != null && !acting && !waiting
 
   const press = (action: ServiceAction, question: string) => {
     if (window.confirm(question)) {
-      void control({ gameId, action })
+      control({ gameId, action })
+        .unwrap()
+        .then(() => setPending(action))
+        // Already reported below; this only keeps the rejection from going unhandled.
+        .catch(() => undefined)
     }
   }
 
@@ -91,6 +133,13 @@ export function ServicePanel({ gameId, displayName }: Props) {
 
       {isLoading ? <p className="empty">Asking the host…</p> : null}
       {acting ? <p className="empty">Asked. Waiting for the host to answer…</p> : null}
+      {waiting && !acting ? (
+        // Named, because a panel that goes quiet after a press reads as a press that did nothing.
+        <p className="empty">
+          The host accepted the {pending}. It still reports the state below, which is normal for a
+          minute.
+        </p>
+      ) : null}
       {isError ? <p className="alert">The API could not read the run state.</p> : null}
       {data?.note != null ? <p className="empty">{data.note}</p> : null}
       {result.isError ? (
