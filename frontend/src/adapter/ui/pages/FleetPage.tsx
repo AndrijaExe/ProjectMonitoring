@@ -53,9 +53,11 @@ export function FleetPage() {
         // What they are not is current, and a board that hides that lies by staying quiet.
         <p className="alert">
           {data.last_probe_at == null
-            ? 'Nothing has been probed yet. The hourly poll has not reached the API, so every status below is unknown rather than good.'
-            : `No probe in the last ${Math.round(data.stale_after_minutes / 60)}h (newest ${formatCheckedAt(data.last_probe_at)}). The scheduled poll has stopped, so the statuses below are history, not news.`}{' '}
-          Check the Poll health workflow in GitHub Actions.
+            ? // An empty history and a broken schedule look identical from here, and they are
+              // not the same thing: clearing the history produces this for an hour. Naming the
+              // wrong one sends the reader to search a workflow that is working.
+              'No probe is stored, so every status below is unknown rather than good. Either nothing has polled yet, or the history was just cleared. Update status fills it now; if it is still empty after the next hour, check the Poll health workflow in GitHub Actions.'
+            : `No probe in the last ${Math.round(data.stale_after_minutes / 60)}h (newest ${formatCheckedAt(data.last_probe_at)}). The scheduled poll has stopped, so the statuses below are history, not news. Check the Poll health workflow in GitHub Actions.`}
         </p>
       ) : null}
       {isLoading ? <p className="empty">Reading the board…</p> : null}

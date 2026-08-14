@@ -149,7 +149,10 @@ comes from a machine that is not this one; it also reports failures immediately 
 waiting for a grace period to expire. And `GetMonitoringOverview` publishes the age of the
 newest probe with the board, so a fleet page whose data has gone quiet says so instead of
 implying the fleet is fine. The heartbeat covers the hours nobody is watching; the banner
-covers the moment somebody is. A poll that answers `200` while probing nothing counts as a
+covers the moment somebody is. What the banner deliberately does not do is name a culprit it
+cannot see: an empty history looks exactly like a stopped schedule from here, and clearing the
+history produces that state on purpose for an hour, so blaming the workflow would send a reader
+to search something that is working. A poll that answers `200` while probing nothing counts as a
 failed run, because a monitor watching zero projects is not a working monitor.
 
 ## Talking to the host
