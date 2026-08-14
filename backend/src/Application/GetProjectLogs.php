@@ -7,7 +7,7 @@ namespace App\Application;
 use App\Model\GameId;
 use App\Model\LogFilter;
 use App\Model\LogSource;
-use App\Model\LogsUnavailable;
+use App\Model\RenderUnavailable;
 use App\Model\ProjectRepository;
 
 final class GetProjectLogs
@@ -41,7 +41,7 @@ final class GetProjectLogs
         // not as a broken page: the rest of the project view is still worth reading.
         try {
             $page = $this->logs->recent($project, $filter);
-        } catch (LogsUnavailable $exception) {
+        } catch (RenderUnavailable $exception) {
             return [
                 'configured' => true,
                 'source' => null,

@@ -119,6 +119,58 @@ final class PlatformEndpointsTest extends WebTestCase
         self::assertSame(['accepted' => 1], json_decode($client->getResponse()->getContent() ?: '', true));
     }
 
+    public function testTheServiceRouteNeedsTheAdminTokenLikeEverythingElse(): void
+    {
+        $client = static::createClient();
+        $client->request('POST', '/api/v1/projects/loop9/service', content: json_encode(['action' => 'stop']));
+
+        self::assertResponseStatusCodeSame(403);
+    }
+
+    public function testAnActionNobodyOffersIsARequestErrorAndNotAnOutage(): void
+    {
+        $client = static::createClient();
+        $client->request(
+            'POST',
+            '/api/v1/projects/loop9/service',
+            server: ['HTTP_X_ADMIN_TOKEN' => 'test-admin-token-ok', 'CONTENT_TYPE' => 'application/json'],
+            content: json_encode(['action' => 'delete'], JSON_THROW_ON_ERROR),
+        );
+
+        // Read before the project is looked up, so a typo cannot be reported as a missing game.
+        self::assertResponseStatusCodeSame(400);
+        self::assertStringContainsString('rebuild, stop or start', $client->getResponse()->getContent() ?: '');
+    }
+
+    public function testWithoutAHostKeyTheRunStateIsReadableAndSaysWhatIsMissing(): void
+    {
+        $client = static::createClient();
+        $client->request('GET', '/api/v1/projects/loop9/service', server: [
+            'HTTP_X_ADMIN_TOKEN' => 'test-admin-token-ok',
+        ]);
+
+        self::assertResponseIsSuccessful();
+        $payload = json_decode($client->getResponse()->getContent() ?: '', true);
+        self::assertIsArray($payload);
+        self::assertFalse($payload['configured']);
+        self::assertFalse($payload['enabled']);
+        self::assertNull($payload['state']);
+        self::assertStringContainsString('RENDER_API_KEY', (string) $payload['note']);
+    }
+
+    public function testAnActionIsRefusedRatherThanAttemptedWhenNothingIsConfigured(): void
+    {
+        $client = static::createClient();
+        $client->request(
+            'POST',
+            '/api/v1/projects/loop9/service',
+            server: ['HTTP_X_ADMIN_TOKEN' => 'test-admin-token-ok', 'CONTENT_TYPE' => 'application/json'],
+            content: json_encode(['action' => 'stop'], JSON_THROW_ON_ERROR),
+        );
+
+        self::assertResponseStatusCodeSame(403);
+    }
+
     public function testIngestRejectsBadToken(): void
     {
         $client = static::createClient();

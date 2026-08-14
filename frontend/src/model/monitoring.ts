@@ -91,6 +91,33 @@ export type LogQueryArgs = {
   text?: string
 }
 
+export type ServiceAction = 'rebuild' | 'stop' | 'start'
+
+export type ServiceState = {
+  /** The name the host knows it by, which need not match the game id. */
+  name: string
+  /** Switched off on purpose, as opposed to failing. */
+  stopped: boolean
+  /** A deploy is in flight, so acting again would only queue behind it. */
+  busy: boolean
+  /** The last deploy did not land, which means the previous build is what is running. */
+  failed: boolean
+  deploy_status: string
+  deploy_at: string | null
+  /** Subject line of the commit that produced the running build. */
+  commit: string
+  summary: string
+}
+
+export type ServiceStatus = {
+  /** False when the host has no API key wired, which is a setup step rather than a fault. */
+  configured: boolean
+  /** False keeps the panel readable and the buttons out of reach. */
+  enabled: boolean
+  state: ServiceState | null
+  note: string | null
+}
+
 export function displayStatus(status: string | null | undefined): HealthStatus {
   if (
     status === 'ok' ||

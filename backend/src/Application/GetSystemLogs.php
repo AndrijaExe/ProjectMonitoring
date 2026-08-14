@@ -6,7 +6,7 @@ namespace App\Application;
 
 use App\Model\LogFilter;
 use App\Model\LogSource;
-use App\Model\LogsUnavailable;
+use App\Model\RenderUnavailable;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
@@ -39,7 +39,7 @@ final class GetSystemLogs
 
         try {
             $page = $this->logs->recentForService($this->serviceId, $filter);
-        } catch (LogsUnavailable $exception) {
+        } catch (RenderUnavailable $exception) {
             return ['configured' => true, 'source' => null, 'lines' => [], 'note' => $exception->getMessage()];
         }
 

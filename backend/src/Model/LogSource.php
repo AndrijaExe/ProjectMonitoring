@@ -14,14 +14,14 @@ interface LogSource
     public function isConfigured(): bool;
 
     /**
-     * @throws LogsUnavailable when the upstream cannot be reached or refuses the query
+     * @throws RenderUnavailable when the upstream cannot be reached or refuses the query
      */
     public function recent(Project $project, LogFilter $filter): LogPage;
 
     /**
      * Reads a host's own logs, for the monitor looking at itself.
      *
-     * @throws LogsUnavailable
+     * @throws RenderUnavailable
      */
     public function recentForService(string $serviceId, LogFilter $filter): LogPage;
 }

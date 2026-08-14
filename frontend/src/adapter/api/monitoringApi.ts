@@ -10,6 +10,8 @@ import type {
   OverviewResponse,
   ProjectDetail,
   ProjectLogs,
+  ServiceAction,
+  ServiceStatus,
 } from '../../model/monitoring'
 import { clearToken } from '../store/authSlice'
 
@@ -47,7 +49,7 @@ const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> =
 export const monitoringApi = createApi({
   reducerPath: 'monitoringApi',
   baseQuery,
-  tagTypes: ['Overview', 'Project'],
+  tagTypes: ['Overview', 'Project', 'Service'],
   endpoints: (builder) => ({
     login: builder.mutation<{ authenticated: boolean }, string>({
       query: (token) => ({
@@ -92,6 +94,24 @@ export const monitoringApi = createApi({
         return `/api/v1/system/logs${search === '' ? '' : `?${search}`}`
       },
     }),
+    getServiceStatus: builder.query<ServiceStatus, string>({
+      query: (gameId) => `/api/v1/projects/${gameId}/service`,
+      providesTags: (_result, _error, gameId) => [{ type: 'Service', id: gameId }],
+    }),
+    controlService: builder.mutation<ServiceStatus, { gameId: string; action: ServiceAction }>({
+      query: ({ gameId, action }) => ({
+        url: `/api/v1/projects/${gameId}/service`,
+        method: 'POST',
+        body: { action },
+      }),
+      // The host reports the old state for a while after accepting, so the probes and the run
+      // state are both worth asking about again rather than trusting this answer.
+      invalidatesTags: (_result, _error, { gameId }) => [
+        'Overview',
+        { type: 'Project', id: gameId },
+        { type: 'Service', id: gameId },
+      ],
+    }),
     clearHistory: builder.mutation<{ cleared: number }, string>({
       query: (gameId) => ({
         url: `/api/v1/projects/${gameId}/snapshots`,
@@ -131,6 +151,8 @@ export const {
   useGetProjectQuery,
   useGetProjectLogsQuery,
   useGetSystemLogsQuery,
+  useGetServiceStatusQuery,
+  useControlServiceMutation,
   useClearHistoryMutation,
   useSendTestAlertMutation,
   usePollAllMutation,

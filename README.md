@@ -85,6 +85,10 @@ Setting `RENDER_API_KEY` adds a log panel to each project page, reading the targ
 logs through the API so a failing probe and its cause sit on one screen. It is optional and
 the key never leaves the server; see [DEPLOY.md](DEPLOY.md).
 
+Adding `CONTROLS_ENABLED=true` on top of that key turns the project page's service panel from a
+report into three buttons: rebuild, stop, start. The two switches are separate because reading
+logs and taking a service down are not the same decision.
+
 Setting `RESEND_API_KEY` and `ALERT_EMAIL_TO` turns state changes into email, so the board
 stops being something you have to remember to open. Only transitions are sent, and readings
 that mean "could not see the target" are never treated as either failure or recovery.

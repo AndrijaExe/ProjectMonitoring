@@ -8,6 +8,7 @@ import { SeeMore } from '../components/SeeMore'
 import { useSeeMore } from '../useSeeMore'
 import { LogPanel } from '../components/LogPanel'
 import { StatusChip } from '../components/StatusChip'
+import { ServicePanel } from '../components/ServicePanel'
 import { Shell } from '../components/Shell'
 import { formatCheckedAt } from '../formatTime'
 import { useStatusUpdate } from '../useStatusUpdate'
@@ -238,6 +239,8 @@ export function ProjectPage() {
           />
         </article>
       </section>
+
+      <ServicePanel gameId={card.game_id} displayName={card.display_name} />
 
       <LogPanel title="Logs" gameId={card.game_id} />
     </Shell>

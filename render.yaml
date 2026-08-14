@@ -49,6 +49,12 @@ services:
       # the browser, which matters because it authorises everything the dashboard can do.
       - key: RENDER_API_KEY
         sync: false
+      # Lets the console stop, start and rebuild a target's service through the key above.
+      # Separate from it on purpose: reading logs and taking a service down are not the same
+      # decision, so the panel is readable with the key alone and acts only with this. The
+      # application default is off; this blueprint is the deployment that asked for the buttons.
+      - key: CONTROLS_ENABLED
+        value: 'true'
       # Optional. Email alerts on health changes, sent over HTTPS rather than SMTP because
       # Render blocks ports 25, 465 and 587 on free services. Leave either of the first two
       # unset and the monitor simply stays quiet.

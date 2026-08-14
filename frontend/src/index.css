@@ -66,6 +66,18 @@ button.ghost {
   border-color: var(--line);
 }
 
+/* The one button here that takes a service off the air does not look like the rest. */
+button.danger {
+  background: transparent;
+  color: var(--alert);
+  border-color: var(--alert);
+}
+
+button.danger:hover:not(:disabled) {
+  background: var(--alert);
+  color: var(--ink);
+}
+
 .shell,
 .login-shell {
   width: min(1080px, calc(100% - 2.5rem));
@@ -411,6 +423,44 @@ td {
 .see-more button {
   font-size: 0.78rem;
   padding: 0.35rem 0.7rem;
+}
+
+.service {
+  margin-top: 2rem;
+  border-top: 1px solid var(--line);
+  padding-top: 1.4rem;
+}
+
+.service-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.service-head h2 {
+  margin: 0;
+}
+
+.service-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.service-actions button {
+  padding: 0.55rem 0.9rem;
+}
+
+.service .totals {
+  margin-top: 1rem;
+  max-width: 34rem;
+}
+
+.service .note {
+  max-width: 28ch;
+  text-align: right;
 }
 
 .logs {

@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Tests\Unit\Adapter;
 
 use App\Adapter\Logs\RenderLogSource;
+use App\Adapter\Render\RenderApi;
+use App\Adapter\Render\RenderServiceDirectory;
 use App\Model\GameId;
 use App\Model\IngestToken;
 use App\Model\LogFilter;
-use App\Model\LogsUnavailable;
+use App\Model\RenderUnavailable;
 use App\Model\Project;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
@@ -19,11 +21,11 @@ final class RenderLogSourceTest extends TestCase
 {
     public function testWithoutAKeyItReportsItselfUnconfigured(): void
     {
-        $source = new RenderLogSource(new MockHttpClient([]), new ArrayAdapter(), '');
+        $source = $this->source(new MockHttpClient([]), '');
 
         self::assertFalse($source->isConfigured());
 
-        $this->expectException(LogsUnavailable::class);
+        $this->expectException(RenderUnavailable::class);
         $source->recent($this->project(), new LogFilter());
     }
 
@@ -55,7 +57,7 @@ final class RenderLogSourceTest extends TestCase
             ]), ['response_headers' => ['content-type' => 'application/json']]);
         });
 
-        $source = new RenderLogSource($client, new ArrayAdapter(), 'rnd_key');
+        $source = $this->source($client, 'rnd_key');
         $page = $source->recent($this->project(), new LogFilter(50, 'info', 'chat'));
         $lines = $page->lines;
 
@@ -93,7 +95,7 @@ final class RenderLogSourceTest extends TestCase
             ]]));
         });
 
-        $lines = (new RenderLogSource($client, new ArrayAdapter(), 'rnd_key'))
+        $lines = ($this->source($client, 'rnd_key'))
             ->recent($this->project(), new LogFilter())
             ->lines;
 
@@ -118,7 +120,7 @@ final class RenderLogSourceTest extends TestCase
             ]]));
         });
 
-        $lines = (new RenderLogSource($client, new ArrayAdapter(), 'rnd_key'))
+        $lines = ($this->source($client, 'rnd_key'))
             ->recent($this->project(), new LogFilter())
             ->lines;
 
@@ -134,7 +136,7 @@ final class RenderLogSourceTest extends TestCase
             $this->entry('10.231.26.214 - - [13/Aug/2026:12:53:06 +0000] "GET /healthz HTTP/1.1" 200 252 "-" "Render/1.0"', '2026-08-13T12:53:06+00:00'),
         ]);
 
-        $page = (new RenderLogSource($client, new ArrayAdapter(), 'rnd_key'))
+        $page = ($this->source($client, 'rnd_key'))
             ->recent($this->project(), new LogFilter());
 
         // Render probes the health path every few seconds, so left in they would be the only
@@ -151,7 +153,7 @@ final class RenderLogSourceTest extends TestCase
             $this->entry('10.231.26.214 - - [13/Aug/2026:12:53:16 +0000] "GET /healthz HTTP/1.1" 200 252 "-" "Render/1.0"', '2026-08-13T12:53:16+00:00'),
         ]);
 
-        $page = (new RenderLogSource($client, new ArrayAdapter(), 'rnd_key'))
+        $page = ($this->source($client, 'rnd_key'))
             ->recent($this->project(), new LogFilter());
 
         // "Nothing here" and "nothing worth showing here" are different answers, and only one
@@ -191,7 +193,7 @@ final class RenderLogSourceTest extends TestCase
             return new MockResponse(json_encode(['logs' => []]));
         });
 
-        $page = (new RenderLogSource($client, new ArrayAdapter(), 'rnd_key'))
+        $page = ($this->source($client, 'rnd_key'))
             ->recentForService('srv-self', new LogFilter());
 
         self::assertSame('monitoring-api', $page->source);
@@ -229,7 +231,7 @@ final class RenderLogSourceTest extends TestCase
             return new MockResponse(json_encode(['logs' => []]));
         });
 
-        $source = new RenderLogSource($client, new ArrayAdapter(), 'rnd_key');
+        $source = $this->source($client, 'rnd_key');
         $source->recent($this->project(), new LogFilter());
         $source->recent($this->project(), new LogFilter());
 
@@ -239,9 +241,9 @@ final class RenderLogSourceTest extends TestCase
     public function testARejectedKeySaysSoRatherThanLeakingTheStatusCode(): void
     {
         $client = new MockHttpClient(new MockResponse('{"message":"unauthorized"}', ['http_code' => 401]));
-        $source = new RenderLogSource($client, new ArrayAdapter(), 'wrong-key');
+        $source = $this->source($client, 'wrong-key');
 
-        $this->expectException(LogsUnavailable::class);
+        $this->expectException(RenderUnavailable::class);
         $this->expectExceptionMessage('Render rejected the API key.');
 
         $source->recent($this->project(), new LogFilter());
@@ -250,9 +252,9 @@ final class RenderLogSourceTest extends TestCase
     public function testATargetOutsideRenderIsRefusedBeforeAnyRequest(): void
     {
         $client = new MockHttpClient([]);
-        $source = new RenderLogSource($client, new ArrayAdapter(), 'rnd_key');
+        $source = $this->source($client, 'rnd_key');
 
-        $this->expectException(LogsUnavailable::class);
+        $this->expectException(RenderUnavailable::class);
         $this->expectExceptionMessage('only wired for targets hosted on Render');
 
         $source->recent($this->project('https://example.test/healthz'), new LogFilter());
@@ -288,7 +290,7 @@ final class RenderLogSourceTest extends TestCase
             return new MockResponse(json_encode(['logs' => []]));
         });
 
-        $source = new RenderLogSource($client, new ArrayAdapter(), 'rnd_key');
+        $source = $this->source($client, 'rnd_key');
         $source->recent($this->project(), new LogFilter());
 
         self::assertSame(3, $client->getRequestsCount());
@@ -307,9 +309,9 @@ final class RenderLogSourceTest extends TestCase
             ]));
         });
 
-        $source = new RenderLogSource($client, new ArrayAdapter(), 'rnd_key');
+        $source = $this->source($client, 'rnd_key');
 
-        $this->expectException(LogsUnavailable::class);
+        $this->expectException(RenderUnavailable::class);
         // Naming what the key can reach turns "not found" into a diagnosis: a key from the
         // wrong workspace lists the wrong services.
         $this->expectExceptionMessage('No Render service serves loop9-backend.onrender.com. This key sees: monitoring-api, monitoring-console.');
@@ -324,6 +326,13 @@ final class RenderLogSourceTest extends TestCase
         self::assertSame(LogFilter::MAX_LIMIT, $filter->limit);
         self::assertSame(LogFilter::MAX_WINDOW_MINUTES, $filter->sinceMinutes);
         self::assertSame(1, (new LogFilter(0))->limit);
+    }
+
+    private function source(MockHttpClient $client, string $apiKey = 'rnd_key'): RenderLogSource
+    {
+        $api = new RenderApi($client, $apiKey);
+
+        return new RenderLogSource($api, new RenderServiceDirectory($api, new ArrayAdapter()));
     }
 
     private function project(string $healthUrl = 'https://loop9-backend.onrender.com/healthz'): Project

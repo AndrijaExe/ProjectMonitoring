@@ -59,8 +59,9 @@ flowchart TB
 - Read a game's own counters each time a poll finds it up
 - Say out loud when the probes themselves have stopped arriving
 - Mail the operator when a game's own counters misbehave, not only when it stops answering
+- Stop, start and rebuild a target's service at its host, from the project page
 
-Management controls (kill-switch, provider routing, Unreal remote) are out of scope.
+Provider routing and Unreal remote control are still out of scope.
 
 ## Probes
 
@@ -151,16 +152,25 @@ implying the fleet is fine. The heartbeat covers the hours nobody is watching; t
 covers the moment somebody is. A poll that answers `200` while probing nothing counts as a
 failed run, because a monitor watching zero projects is not a working monitor.
 
+## Talking to the host
+
+`RenderApi` is the only place that holds the Render key and the only place that builds a request
+to it. That is not tidiness about secrets: a Render key authorises everything the dashboard can
+do, including deleting services, so the set of things it can be used for has to be the set of
+calls written in one readable file rather than whatever a compromised browser session invents.
+The console never sees the key.
+
+`RenderServiceDirectory` turns a project into the service that answers for it, from the hostname
+in its health URL rather than from another column, so registering a project stays a matter of
+naming its endpoints. Render appends a suffix to a hostname when the name is taken platform-wide,
+so name and hostname can disagree and the URL the host reports is treated as the authority. The
+lookup is cached for an hour. A target hosted elsewhere is refused before any request goes out.
+Two features need this answer — reading logs and pressing buttons — and one copy of it means one
+place to fix when the host changes how names and hostnames relate.
+
 ## Logs
 
-`LogSource` is a port with one adapter, `RenderLogSource`. The console never talks to Render:
-it asks this API, which holds the key. That is the whole reason the port exists — a Render key
-authorises everything the dashboard can do, so the set of things it can be used for has to be
-the set of things this codebase implements, not whatever a compromised browser session invents.
-
-The Render service is resolved from the hostname in the project's health URL rather than stored
-as another column, so registering a project stays a matter of naming its endpoints. The lookup
-is cached for an hour. A target hosted elsewhere is refused before any request goes out.
+`LogSource` is a port with one adapter, `RenderLogSource`, reading through the two classes above.
 
 Everything that can go wrong here — no key, a rejected key, an unknown service, Render being
 unreachable — comes back as a note on an empty panel instead of an exception. The probe history
@@ -227,16 +237,44 @@ empty panel, and only the log tells them apart. The same goes for a game countin
 rather than Redis, which it reports in the payload — numbers that die with the process produce a
 board of zeros that looks exactly like a quiet day.
 
+## Controls
+
+`ServiceControl` is the one port in this codebase that changes something instead of observing it,
+and everything about it is shaped by that. It offers three actions — stop, start, rebuild — each
+of which the host's own dashboard already offers and each of which is undone by pressing another
+one. Deleting a service, editing its environment and changing its plan are all reachable with the
+same key and are deliberately not reachable here: the console is a faster route to a few
+reversible operations at 3am, not a second control plane.
+
+Two switches guard it. The key enables reading, and `CONTROLS_ENABLED` enables acting; with the
+key alone the panel shows the run state and the buttons stay out of reach. Splitting them is the
+point — wanting to read logs and being willing to take a service down are not the same decision,
+and the first should not silently grant the second. Every press writes two log lines, one before
+the call and one after the host accepts, because a trail with only the second line cannot explain
+an outage that began with the first.
+
+Run state is read from the host rather than inferred from probes, because probes cannot make the
+distinction that matters most here: a stopped service and a crashed one both fail every check, and
+only one of them is worth waking up for. The panel therefore says "stopped on purpose", "deploying
+now", or "the last deploy failed, so the previous build is what is running" — sentences an operator
+can act on, rather than a status word they have to decode. The host reports the pre-change state
+for a while after accepting an action, so the panel keeps asking instead of trusting the answer it
+got, quickly while a deploy is in flight and rarely once it settles.
+
+Stopping is honest about its consequences rather than quiet about them. The confirmation says what
+the game loses — no logins, no chat, no telemetry — and that the probes will report it down and
+mail about it, because they will: a deliberate outage looks exactly like a real one from outside,
+and suppressing that mail would mean teaching the alert path to trust a flag over a measurement.
+
+There is still no record of *who* pressed anything, because a single shared `ADMIN_TOKEN` cannot
+tell one operator from another, and naming an actor would be an invention. That is a limit of the
+credential, not of the log.
+
 ## Deleting history
 
-`ClearHealthHistory` removes every snapshot for one project. It is the only destructive action in
-the API, so it writes a warning to the service log before returning, and that log is what the
-fleet page now shows. A monitor that can quietly erase its own evidence is worse than no monitor.
-
-There is no audit table yet and no record of who pressed the button, because a single shared
-`ADMIN_TOKEN` cannot tell one operator from another. Naming an actor would be an invention. When
-control actions arrive and more than one person holds a credential, both problems get solved
-together rather than half-solved now.
+`ClearHealthHistory` removes every snapshot for one project. It writes a warning to the service
+log before returning, and that log is what the fleet page shows. A monitor that can quietly erase
+its own evidence is worse than no monitor.
 
 ## Auth
 

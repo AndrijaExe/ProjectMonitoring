@@ -143,10 +143,10 @@ cached for an hour.
 Two limits are worth stating plainly:
 
 - **A Render API key has no read-only mode.** It authorises everything you can do in the
-  dashboard, deleting services included. It stays in the API's environment and is never sent
-  to the browser, and the API exposes no route that does anything with it beyond reading logs,
-  so what an admin-token holder can reach is limited to the panel. Treat the key as a
-  credential of the same weight as the database password anyway.
+  dashboard, deleting services included. It stays in the API's environment and is never sent to
+  the browser, and the routes that use it are the log queries here plus the three buttons in
+  section 8 — nothing else, whatever the key itself would allow. Treat it as a credential of the
+  same weight as the database password.
 - Free plans keep only a short window of logs, and the panel asks for the last 24 hours. For
   anything older, use the Render dashboard.
 
@@ -263,6 +263,61 @@ fleet page — whenever the answer is memory.
 Counters are read only when the health probe just came back `ok`. Asking a sleeping instance
 would spend the timeout budget again to learn what the probe already reported, and with hourly
 polling that budget is the thing keeping the free plan affordable.
+
+## 8. Stop, start and rebuild from the console (optional)
+
+The project page can show what the host says about the target's service and change it. Three
+buttons, each undone by another one:
+
+| Button | What it does | When it helps |
+|---|---|---|
+| **Rebuild** | Builds the current commit again and deploys it | A deploy that failed, or a build that went out with a bad cache |
+| **Stop** | Suspends the service until someone starts it | The kill switch: nothing runs, nothing is spent |
+| **Start** | Resumes a stopped service | Undoing the above |
+
+It needs the key from section 5 plus one more variable. [`render.yaml`](render.yaml) now sets it,
+so a blueprint sync is enough; a service deployed before that needs it added by hand on
+`monitoring-api` > Environment:
+
+```
+CONTROLS_ENABLED=true
+```
+
+**Off by default, and the two switches are separate on purpose.** The key alone lets the panel
+report the run state while the buttons stay out of reach, because wanting to read logs and being
+willing to take a service down are not the same decision. With controls off, the panel says so
+and everything else on the page still works.
+
+What the panel adds beyond the probe chips is the one distinction probes cannot make: a stopped
+service and a crashed one both fail every check, and only one of them is worth getting up for. So
+it reads the host directly and says "stopped", "deploying now", or "the last deploy failed, so the
+previous build is what is running", with the commit subject of what is live.
+
+Expect this after pressing **Stop**, because it is honest rather than convenient:
+
+- The next scheduled poll finds the target unreachable and mails you that it is down. A
+  deliberate outage looks exactly like a real one from outside, and a monitor that trusted a flag
+  over a measurement would be a worse monitor.
+- A day later, the `quiet` alarm from section 6 fires too, for the same reason.
+- Pressing **Start** produces the recovery mail, with the outage measured across your maintenance
+  window.
+
+Every press writes two lines into the API's own log — one when it is asked, one when the host
+accepts — visible under **Monitor logs** on the fleet page. There is no record of *who* pressed
+it: one shared `ADMIN_TOKEN` cannot tell two operators apart, and inventing a name would be worse
+than admitting the limit.
+
+Two things this does not do. It never chooses which code runs — no rollbacks, no branch or commit
+picking — and it offers nothing that is not reversible by another button, so deleting a service,
+editing its environment and changing its plan stay in the Render dashboard where they belong.
+Render also rate limits these calls to ten a minute per service; the panel reports that as
+something to wait out rather than as a failure.
+
+For Loop 9 specifically, stopping the backend is safe in the way that matters: the game on Steam
+runs without it. Players lose chat, Steam login and telemetry, and get connection errors in their
+place, and no AI provider call can be made — which is where the real money goes. The softer brake
+still exists and is not this button: `GAME_GLOBAL_DAILY_QUOTA` on Loop 9 caps paid work per day
+while keeping logins and telemetry alive, at the cost of an environment change and a redeploy.
 
 ## Free tier limits worth knowing
 
