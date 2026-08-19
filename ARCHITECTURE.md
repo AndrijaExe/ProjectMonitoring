@@ -60,6 +60,7 @@ flowchart TB
 - Say out loud when the probes themselves have stopped arriving
 - Mail the operator when a game's own counters misbehave, not only when it stops answering
 - Stop, start and rebuild a target's service at its host, from the project page
+- Split a project into health, AI usage, and logs, so spend is not buried under probes
 
 Provider routing and Unreal remote control are still out of scope.
 
@@ -209,6 +210,11 @@ it does not have and a copy of this API's credentials, to answer a question this
 awake to ask on its own schedule. The reading rides along with the poll, and only when the health
 probe just came back `ok`: asking a sleeping or rate-limited instance for its counters would
 spend the timeout budget again to learn what the probe already reported.
+
+Token spend is one of those counters, not a second integration. Asking the provider's billing
+API from here would mean holding their key; the game already sees `usage` on every completion
+and publishes `ai.tokens.in`, `ai.tokens.out` and `ai.cost.micros`. The project page keeps that
+on its own tab so a day of probes does not bury the bill.
 
 The scrape token lives in `METRICS_TOKENS` in the environment, as `gameId=token` pairs, not in
 the projects table beside the URL. The ingest token is stored only as a hash for exactly that

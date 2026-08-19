@@ -414,6 +414,56 @@ td {
   gap: 0.6rem;
 }
 
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  margin: 0 0 1.4rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.tab {
+  background: transparent;
+  color: var(--mute);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 0.7rem 1rem;
+  letter-spacing: 0.12em;
+}
+
+.tab:hover:not(:disabled) {
+  color: var(--paper);
+}
+
+.tab-active {
+  color: var(--lime);
+  border-bottom-color: var(--lime);
+}
+
+.usage {
+  margin-top: 0.2rem;
+}
+
+.usage h3 {
+  margin: 1.4rem 0 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+
+.usage-totals {
+  max-width: 28rem;
+}
+
+.tabs + .logs {
+  margin-top: 0;
+  border-top: 0;
+  padding-top: 0;
+}
+
 .see-more {
   display: flex;
   gap: 0.6rem;

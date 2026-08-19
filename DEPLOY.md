@@ -253,6 +253,9 @@ Three things to expect the first day:
 - **A number can drop.** The game keeps its counters in Redis; if that key is lost the count
   restarts, and the console reads the new reading as everything counted since. It means the
   counter store was cleared, not that the game un-happened.
+- **The Usage tab is the same scrape, not a billing API.** After Loop 9 is deployed with token
+  counters, `ai.tokens.in` / `ai.tokens.out` / estimated spend appear there. Until then the tab
+  says so rather than looking broken.
 
 **`REDIS_URL` has to be set on Loop 9 for any of this to hold.** Without it the game counts in
 the memory of one request, which is to say it does not count: every reading comes back empty and
