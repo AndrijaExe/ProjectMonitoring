@@ -26,6 +26,13 @@ postgresql://postgres.abcdefgh:PASSWORD@aws-0-eu-central-1.pooler.supabase.com:6
 
 Substitute the real password. Keep `sslmode=require`; Supabase refuses plaintext.
 
+The app talks to Postgres directly. It does not use the Supabase JS client or the anon key.
+Tables still sit in `public`, which PostgREST exposes, so the schema enables row-level
+security with no policies: the database owner (this API) keeps working, and anyone holding
+only the project URL cannot read or write. That is what their "table publicly accessible"
+mail is about. You can also turn the Data API off under Project Settings → API if you will
+never use it.
+
 ## 2. Blueprint on Render
 
 **New > Blueprint**, pick the repo, apply [`render.yaml`](render.yaml). Two values are

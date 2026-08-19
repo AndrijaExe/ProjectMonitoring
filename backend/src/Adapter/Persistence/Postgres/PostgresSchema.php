@@ -59,6 +59,22 @@ final class PostgresSchema
             PRIMARY KEY (game_id, alarm_key)
         )
         SQL,
+        // Supabase exposes every public table over PostgREST. This app never uses that
+        // API — it connects as the database owner, who bypasses RLS — but without a
+        // policy the anon key would read and write the lot. Enabling RLS with no
+        // policies closes the door and clears their "table publicly accessible" mail.
+        <<<'SQL'
+        ALTER TABLE projects ENABLE ROW LEVEL SECURITY
+        SQL,
+        <<<'SQL'
+        ALTER TABLE health_snapshots ENABLE ROW LEVEL SECURITY
+        SQL,
+        <<<'SQL'
+        ALTER TABLE metric_samples ENABLE ROW LEVEL SECURITY
+        SQL,
+        <<<'SQL'
+        ALTER TABLE metric_alarms ENABLE ROW LEVEL SECURITY
+        SQL,
     ];
 
     public function __construct(private readonly PostgresConnection $connection)
