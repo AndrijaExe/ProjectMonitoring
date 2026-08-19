@@ -218,12 +218,13 @@ The fourth needs a number, because only you know what "too many" means for your 
 `monitoring-api` > Environment set `ALERT_RATE_PER_HOUR` to comma separated `name=limit` pairs:
 
 ```
-api.errors=20,ai.failed=10,safety.unavailable=10
+api.errors=20,ai.failed=10,safety.unavailable=10,chat.denied.player_daily=0,chat.denied.player_monthly=0,abuse.watch=0
 ```
 
-Loop 9 publishes `chat.messages`, `chat.denied`, `api.errors`, `ai.fallback`, `ai.failed`,
-`safety.blocked`, `safety.unavailable`, `auth.issued`, `auth.rejected` and `run.ended`, so any
-of those can be given a ceiling. A typo is ignored rather than fatal: a bad pair is dropped and
+Loop 9 publishes `chat.messages`, `chat.denied`, `chat.denied.player_daily`, `abuse.watch`,
+`api.errors`, `ai.fallback`, `ai.failed`, `safety.blocked`, `safety.unavailable`, `auth.issued`,
+`auth.rejected` and `run.ended`, so any of those can be given a ceiling. A ceiling of `0` mails
+on the first event in the hour — that is how a farmer hitting a quota shows up. A typo is ignored rather than fatal: a bad pair is dropped and
 the poll still records health. Leave the variable empty and no rate alarm exists.
 
 Each alarm is mailed once when it opens and once when it clears, the same as a probe alert, and

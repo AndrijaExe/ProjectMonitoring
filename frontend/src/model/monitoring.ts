@@ -89,7 +89,12 @@ export type ProjectDetail = {
 }
 
 export function isUsageMetric(name: string): boolean {
-  return name.startsWith('ai.tokens.') || name.startsWith('ai.cost.micros')
+  return (
+    name.startsWith('ai.tokens.') ||
+    name.startsWith('ai.cost.micros') ||
+    name.startsWith('chat.denied.') ||
+    name.startsWith('abuse.')
+  )
 }
 
 export type OverviewResponse = {

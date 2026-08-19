@@ -62,7 +62,10 @@ export function ProjectPage() {
   }
 
   const card = data.project
-  const gauges = Object.entries(card.metrics.gauges ?? {})
+  const gauges = Object.entries(card.metrics.gauges ?? {}).filter(
+    ([name]) => !name.startsWith('abuse.'),
+  )
+  const heaviest = card.metrics.gauges?.['abuse.chats.heaviest']
   // Token spend has its own tab, so the health lane keeps the rest of what players did.
   const counters = Object.entries(card.metrics.totals_24h).filter(
     ([name]) => !isUsageMetric(name),
@@ -123,6 +126,12 @@ export function ProjectPage() {
           <span className="chip chip-unseen">
             <span className="chip-label">players online</span>
             {card.metrics.gauges['players.online']}
+          </span>
+        ) : null}
+        {heaviest != null && heaviest >= 20 ? (
+          <span className="chip chip-unseen">
+            <span className="chip-label">heaviest player today</span>
+            {heaviest} chats
           </span>
         ) : null}
         <span className="chip chip-unseen">

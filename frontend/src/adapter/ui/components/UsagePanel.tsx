@@ -13,6 +13,15 @@ const RELATED: { name: string; label: string }[] = [
   { name: 'safety.unavailable', label: 'moderation unavailable' },
 ]
 
+const FAIR_USE: { name: string; label: string }[] = [
+  { name: 'abuse.watch', label: 'players who crossed the daily watch line' },
+  { name: 'chat.denied.player_daily', label: 'hit the daily player cap' },
+  { name: 'chat.denied.player_monthly', label: 'hit the monthly player cap' },
+  { name: 'chat.denied.ip_daily', label: 'hit the daily IP cap' },
+  { name: 'chat.denied.global', label: 'hit the global daily cap' },
+  { name: 'chat.denied.burst', label: 'burst-limited' },
+]
+
 const COLORS = ['#c6f54a', '#6ec8ff', '#f0c14a', '#d4a5ff', '#7f9486']
 
 /**
@@ -34,9 +43,17 @@ export function UsagePanel({ card, usage }: Props) {
     const value = totals[row.name]
     return value == null ? [] : [{ ...row, value }]
   })
+  const fairUse = FAIR_USE.flatMap((row) => {
+    const value = totals[row.name]
+    return value == null ? [] : [{ ...row, value }]
+  })
+  const heaviest = card.metrics.gauges?.['abuse.chats.heaviest']
+  const hot = card.metrics.gauges?.['abuse.players.hot']
+  const hasFairUse = fairUse.length > 0 || (heaviest ?? 0) > 0 || (hot ?? 0) > 0
   const hasTokens = (tokensIn ?? 0) > 0 || (tokensOut ?? 0) > 0
   const hasSpend = (micros ?? 0) > 0
-  const hasAnything = hasTokens || hasSpend || related.length > 0 || days.some(hasDayActivity)
+  const hasAnything =
+    hasTokens || hasSpend || related.length > 0 || hasFairUse || days.some(hasDayActivity)
 
   return (
     <section className="usage">
@@ -124,6 +141,36 @@ export function UsagePanel({ card, usage }: Props) {
               ))}
             </tbody>
           </table>
+        </>
+      ) : null}
+
+      {hasFairUse ? (
+        <>
+          <h3>Fair use</h3>
+          <p className="meta">
+            A normal run is a handful of replies. These numbers are hashed marks, so they say
+            how hard someone is chatting today, never who.
+          </p>
+          <ul className="totals">
+            {heaviest != null && heaviest > 0 ? (
+              <li>
+                <span>heaviest player today</span>
+                <span className="mono">{heaviest} chats</span>
+              </li>
+            ) : null}
+            {hot != null && hot > 0 ? (
+              <li>
+                <span>players over the watch line</span>
+                <span className="mono">{hot}</span>
+              </li>
+            ) : null}
+            {fairUse.map((row) => (
+              <li key={row.name}>
+                <span>{row.label}</span>
+                <span className="mono">{row.value}</span>
+              </li>
+            ))}
+          </ul>
         </>
       ) : null}
 
