@@ -13,6 +13,7 @@ import { ServicePanel } from '../components/ServicePanel'
 import { Shell } from '../components/Shell'
 import { UsagePanel } from '../components/UsagePanel'
 import { formatCheckedAt } from '../formatTime'
+import { isUsageMetric } from '../../../model/monitoring'
 import { useStatusUpdate } from '../useStatusUpdate'
 
 function parseProjectTab(value: string | null): ProjectTabId {
@@ -33,7 +34,7 @@ export function ProjectPage() {
   const history = useSeeMore(data?.health_history ?? [])
   const metrics = useSeeMore(
     (data?.recent_metrics ?? []).filter(
-      (metric) => !metric.name.startsWith('ai.tokens.') && metric.name !== 'ai.cost.micros',
+      (metric) => !isUsageMetric(metric.name),
     ),
   )
 
@@ -64,7 +65,7 @@ export function ProjectPage() {
   const gauges = Object.entries(card.metrics.gauges ?? {})
   // Token spend has its own tab, so the health lane keeps the rest of what players did.
   const counters = Object.entries(card.metrics.totals_24h).filter(
-    ([name]) => !name.startsWith('ai.tokens.') && name !== 'ai.cost.micros',
+    ([name]) => !isUsageMetric(name),
   )
   // The newest gauge row rather than the newest row of any kind, so the timestamp under the
   // levels is when the levels were read and not when anything at all was.
@@ -278,7 +279,7 @@ export function ProjectPage() {
         </>
       ) : null}
 
-      {tab === 'usage' ? <UsagePanel card={card} /> : null}
+      {tab === 'usage' ? <UsagePanel card={card} usage={data.usage} /> : null}
 
       {tab === 'logs' ? <LogPanel title="Logs" gameId={card.game_id} /> : null}
     </Shell>

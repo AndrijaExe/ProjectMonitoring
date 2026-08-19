@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Application;
 
 use App\Application\DTO\ProjectDetail;
+use App\Model\GameId;
 use App\Model\HealthSnapshotStore;
 use App\Model\MetricSample;
 use App\Model\MetricStore;
@@ -18,10 +19,11 @@ final class GetProjectDetail
     ) {
     }
 
-    public function execute(string $gameId): ProjectDetail
+    public function execute(string $gameId, ?\DateTimeImmutable $now = null): ProjectDetail
     {
+        $now ??= new \DateTimeImmutable('now');
         $project = $this->overview->requireProject($gameId);
-        $card = $this->overview->cardFor($project);
+        $card = $this->overview->cardFor($project, $now->modify('-24 hours'));
 
         $history = [];
         foreach ($this->healthSnapshots->recent($project->gameId, 40) as $snapshot) {
@@ -45,6 +47,32 @@ final class GetProjectDetail
             $this->metrics->recent($project->gameId, 50),
         );
 
-        return new ProjectDetail($card, $history, $recentMetrics);
+        return new ProjectDetail($card, $history, $recentMetrics, $this->usage($project->gameId, $card->recentMetricTotals, $now));
+    }
+
+    /**
+     * @param array<string, float> $last24h
+     *
+     * @return array<string, mixed>
+     */
+    private function usage(GameId $gameId, array $last24h, \DateTimeImmutable $now): array
+    {
+        $breakdown = new UsageBreakdown();
+        $today = $now->setTimezone(new \DateTimeZone('UTC'))->setTime(0, 0);
+        $days = [];
+
+        for ($day = $breakdown->windowStart($now); $day <= $today; $day = $day->modify('+1 day')) {
+            $next = $day->modify('+1 day');
+            $days[] = [
+                'date' => $day->format('Y-m-d'),
+                'totals' => $this->metrics->totalsBetween($gameId, $day, $next <= $now ? $next : null),
+            ];
+        }
+
+        return [
+            'window_days' => UsageBreakdown::WINDOW_DAYS,
+            'last_24h' => $breakdown->summarize($last24h),
+            'days' => $breakdown->days($days),
+        ];
     }
 }

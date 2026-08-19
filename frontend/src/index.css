@@ -458,6 +458,38 @@ td {
   max-width: 28rem;
 }
 
+.usage-table {
+  max-width: 36rem;
+  margin-bottom: 0.4rem;
+}
+
+.usage-table td:first-child {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.usage-swatch {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 2px;
+  flex: 0 0 auto;
+}
+
+.usage-chart {
+  display: block;
+  width: 100%;
+  max-width: 44rem;
+  height: auto;
+  margin: 0.4rem 0 1rem;
+}
+
+.usage-axis {
+  fill: var(--mute);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
 .tabs + .logs {
   margin-top: 0;
   border-top: 0;

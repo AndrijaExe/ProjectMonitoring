@@ -73,6 +73,9 @@ final class PlatformEndpointsTest extends WebTestCase
         self::assertSame('loop9', $payload['project']['game_id'] ?? null);
         self::assertIsArray($payload['health_history'] ?? null);
         self::assertIsArray($payload['recent_metrics'] ?? null);
+        self::assertIsArray($payload['usage'] ?? null);
+        self::assertIsArray($payload['usage']['days'] ?? null);
+        self::assertIsArray($payload['usage']['last_24h'] ?? null);
     }
 
     public function testProjectDetailRejectsUnknownGame(): void

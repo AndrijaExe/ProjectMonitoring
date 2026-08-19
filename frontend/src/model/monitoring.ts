@@ -54,10 +54,42 @@ export type MetricRow = {
   recorded_at: string
 }
 
+export type UsageProvider = {
+  id: string
+  label: string
+  tokens_in: number
+  tokens_out: number
+  cost_micros: number
+}
+
+export type UsageDay = {
+  date: string
+  tokens_in: number
+  tokens_out: number
+  cost_micros: number
+  providers: UsageProvider[]
+}
+
+export type ProjectUsage = {
+  window_days: number
+  last_24h: {
+    tokens_in: number
+    tokens_out: number
+    cost_micros: number
+    providers: UsageProvider[]
+  }
+  days: UsageDay[]
+}
+
 export type ProjectDetail = {
   project: ProjectCard
   health_history: HealthHistoryRow[]
   recent_metrics: MetricRow[]
+  usage?: ProjectUsage
+}
+
+export function isUsageMetric(name: string): boolean {
+  return name.startsWith('ai.tokens.') || name.startsWith('ai.cost.micros')
 }
 
 export type OverviewResponse = {

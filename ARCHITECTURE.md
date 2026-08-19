@@ -213,8 +213,9 @@ spend the timeout budget again to learn what the probe already reported.
 
 Token spend is one of those counters, not a second integration. Asking the provider's billing
 API from here would mean holding their key; the game already sees `usage` on every completion
-and publishes `ai.tokens.in`, `ai.tokens.out` and `ai.cost.micros`. The project page keeps that
-on its own tab so a day of probes does not bury the bill.
+and publishes `ai.tokens.in`, `ai.tokens.out` and `ai.cost.micros`, plus the same numbers again
+under the billed host (`ai.tokens.in.openai`, …). The project page keeps that on its own tab,
+with a day-by-day chart from stored readings, so a day of probes does not bury the bill.
 
 The scrape token lives in `METRICS_TOKENS` in the environment, as `gameId=token` pairs, not in
 the projects table beside the URL. The ingest token is stored only as a hash for exactly that
