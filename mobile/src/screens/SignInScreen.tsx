@@ -66,7 +66,7 @@ export function SignInScreen() {
           style={styles.input}
           value={host}
           onChangeText={setHost}
-          placeholder="https://monitoring-api.onrender.com"
+          placeholder="https://monitoring-api-0gy1.onrender.com"
           placeholderTextColor={colors.mute}
           autoCapitalize="none"
           autoCorrect={false}
