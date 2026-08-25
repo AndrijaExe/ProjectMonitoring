@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Monitoring",
-    "slug": "project-monitoring",
+    "slug": "andrijasmafijas",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -27,6 +27,12 @@
     "plugins": [
       "expo-secure-store",
       "expo-notifications"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "cf85aa85-a1d8-4aa1-96ea-8567a8fa5511"
+      }
+    },
+    "owner": "andrijasmafijass-team"
   }
 }
