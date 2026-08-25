@@ -8,9 +8,11 @@
     "userInterfaceStyle": "dark",
     "backgroundColor": "#08110d",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.andrija.monitoring"
     },
     "android": {
+      "package": "com.andrija.monitoring",
       "adaptiveIcon": {
         "backgroundColor": "#08110d",
         "foregroundImage": "./assets/android-icon-foreground.png",

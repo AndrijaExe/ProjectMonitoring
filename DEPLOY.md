@@ -369,9 +369,25 @@ read-only token. Both are kept in the device keychain, so this is a one-off. Set
 `EXPO_PUBLIC_API_BASE_URL` in `mobile/.env.local` prefills the host; leaving it unset is the
 safer default, since an app with the wrong hostname baked in would need rebuilding to fix.
 
-For a standalone app on the phone rather than through Expo Go, `npx eas build -p android
---profile preview` produces an installable APK. That needs an Expo account and a bundle
-identifier, and nothing else here depends on it.
+For a standalone app on the phone rather than through Expo Go, build an APK. `npx eas build -p
+android --profile preview` does it in Expo's cloud and needs an account; the same thing locally
+needs a JDK 17 and the Android SDK, and no account:
+
+```bash
+cd mobile
+npx expo prebuild -p android          # writes android/, which is gitignored and regenerable
+cd android && ./gradlew assembleRelease
+# app/build/outputs/apk/release/app-release.apk
+```
+
+The APK comes out around 70 MB because a release build packs all four CPU architectures;
+trimming `reactNativeArchitectures` in `android/gradle.properties` to `arm64-v8a` roughly halves
+it and covers any phone from the last several years.
+
+It is signed with React Native's debug keystore, which the template wires into the release build
+type. That is fine for a private app installed by hand — the phone will still warn about an
+unknown source — and not fine for Play, which needs a keystore of your own. Nothing else in this
+repository depends on either choice.
 
 The header says which token is in use, `read-only` or `full access`, because the app accepts
 either and knowing which one is on the phone matters. No CORS entry is needed: a native app is
