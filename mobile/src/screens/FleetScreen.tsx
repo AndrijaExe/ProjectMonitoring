@@ -14,11 +14,15 @@ import { formatCheckedAt } from '@shared/ui/formatTime'
 import { useStatusUpdate } from '@shared/ui/useStatusUpdate'
 import { Empty, Kicker, Muted, StatusPill } from '../components/parts'
 import { colors, mono, space, statusColor } from '../theme'
+import { usePushAlerts } from '../usePushAlerts'
 import type { ScreenProps } from '../navigation'
 
 export function FleetScreen({ navigation }: ScreenProps<'Fleet'>) {
   const overview = useGetOverviewQuery()
   const [pollAll] = usePollAllMutation()
+  // This screen is the one that is always mounted while signed in, which makes it the right
+  // place to register for alerts exactly once and the only place with room to say so.
+  const pushProblem = usePushAlerts()
   // Not unwrapped: a refused poll is reported by the board going stale, and a rejection here
   // would escape through the refresh gesture as an unhandled error.
   const status = useStatusUpdate(useCallback(() => pollAll(), [pollAll]))
@@ -68,6 +72,11 @@ export function FleetScreen({ navigation }: ScreenProps<'Fleet'>) {
         Last probe {formatCheckedAt(overview.data?.last_probe_at)}
         {status.busy ? ` · ${status.label}` : ''}
       </Text>
+
+      {/* Quiet rather than alarming: alerts being off is worth knowing, and is not an outage. */}
+      {pushProblem === null ? null : (
+        <Text style={styles.pushOff}>Alerts off · {pushProblem}</Text>
+      )}
 
       {overview.isLoading ? (
         <View style={styles.loading}>
@@ -165,6 +174,13 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textTransform: 'uppercase',
     color: colors.mute,
+    marginBottom: space.lg,
+  },
+  pushOff: {
+    color: colors.mute,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: -space.md,
     marginBottom: space.lg,
   },
   warning: {

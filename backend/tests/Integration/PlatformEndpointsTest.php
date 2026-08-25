@@ -267,6 +267,72 @@ final class PlatformEndpointsTest extends WebTestCase
     }
 
     /**
+     * The deliberate exception to the read-only rule. Asking to be told when something breaks
+     * touches no infrastructure, and a phone that could not register would be a phone that has
+     * to be watched rather than one that speaks up.
+     */
+    public function testTheReadOnlyTokenMayRegisterAPhoneForAlerts(): void
+    {
+        $client = static::createClient();
+        $client->request(
+            'POST',
+            '/api/v1/devices',
+            server: [
+                'HTTP_X_ADMIN_TOKEN' => 'test-readonly-token-ok',
+                'CONTENT_TYPE' => 'application/json',
+            ],
+            content: json_encode([
+                'token' => 'ExponentPushToken[aaaaaaaaaaaaaaaaaaaaaa]',
+                'platform' => 'android',
+            ], JSON_THROW_ON_ERROR),
+        );
+
+        self::assertResponseIsSuccessful();
+        self::assertTrue(json_decode($client->getResponse()->getContent() ?: '', true)['registered'] ?? null);
+    }
+
+    public function testAPhoneCanTakeItselfOffTheListWhenItSignsOut(): void
+    {
+        $client = static::createClient();
+        $client->request(
+            'DELETE',
+            '/api/v1/devices',
+            server: [
+                'HTTP_X_ADMIN_TOKEN' => 'test-readonly-token-ok',
+                'CONTENT_TYPE' => 'application/json',
+            ],
+            content: json_encode(['token' => 'ExponentPushToken[aaaaaaaaaaaaaaaaaaaaaa]'], JSON_THROW_ON_ERROR),
+        );
+
+        self::assertResponseIsSuccessful();
+        self::assertFalse(json_decode($client->getResponse()->getContent() ?: '', true)['registered'] ?? null);
+    }
+
+    public function testSomethingThatIsNotAPushTokenIsRefused(): void
+    {
+        $client = static::createClient();
+        $client->request(
+            'POST',
+            '/api/v1/devices',
+            server: [
+                'HTTP_X_ADMIN_TOKEN' => 'test-readonly-token-ok',
+                'CONTENT_TYPE' => 'application/json',
+            ],
+            content: json_encode(['token' => 'not-a-token', 'platform' => 'android'], JSON_THROW_ON_ERROR),
+        );
+
+        self::assertResponseStatusCodeSame(400);
+    }
+
+    public function testRegisteringAPhoneStillNeedsAToken(): void
+    {
+        $client = static::createClient();
+        $client->request('POST', '/api/v1/devices');
+
+        self::assertResponseStatusCodeSame(403);
+    }
+
+    /**
      * A rejected token is a different answer from a token that may not act, and it keeps its
      * old code so the console goes on signing out when its own secret dies.
      */

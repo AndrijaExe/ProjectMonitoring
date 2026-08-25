@@ -10,6 +10,9 @@
 /mobile/.expo/
 /mobile/dist/
 /mobile/.env.local
+# Identifies one person's Firebase project, and Android push cannot work without it. Downloaded
+# from the Firebase console rather than kept here; app.config.js wires it in when present.
+/mobile/google-services.json
 .phpunit.cache/
 .DS_Store
 response.json

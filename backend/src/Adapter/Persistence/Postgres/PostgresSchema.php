@@ -59,6 +59,17 @@ final class PostgresSchema
             PRIMARY KEY (game_id, alarm_key)
         )
         SQL,
+        // One row per phone that asked to be told. Not tied to a project: the app watches the
+        // whole fleet, and a device that only heard about one game would be a worse monitor
+        // than the mail it replaces.
+        <<<'SQL'
+        CREATE TABLE IF NOT EXISTS device_tokens (
+            token TEXT PRIMARY KEY,
+            platform TEXT NOT NULL,
+            registered_at TIMESTAMPTZ NOT NULL,
+            last_seen_at TIMESTAMPTZ NOT NULL
+        )
+        SQL,
         // Supabase exposes every public table over PostgREST. This app never uses that
         // API — it connects as the database owner, who bypasses RLS — but without a
         // policy the anon key would read and write the lot. Enabling RLS with no
@@ -74,6 +85,9 @@ final class PostgresSchema
         SQL,
         <<<'SQL'
         ALTER TABLE metric_alarms ENABLE ROW LEVEL SECURITY
+        SQL,
+        <<<'SQL'
+        ALTER TABLE device_tokens ENABLE ROW LEVEL SECURITY
         SQL,
     ];
 
@@ -91,6 +105,6 @@ final class PostgresSchema
 
     public function truncate(): void
     {
-        $this->connection->pdo()->exec('TRUNCATE projects, health_snapshots, metric_samples, metric_alarms RESTART IDENTITY CASCADE');
+        $this->connection->pdo()->exec('TRUNCATE projects, health_snapshots, metric_samples, metric_alarms, device_tokens RESTART IDENTITY CASCADE');
     }
 }

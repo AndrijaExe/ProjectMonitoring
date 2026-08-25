@@ -152,6 +152,24 @@ export const monitoringApi = createApi({
         method: 'POST',
       }),
     }),
+    /**
+     * Where to send push alerts. Open to the read-only token, unlike everything else that
+     * writes, because asking to be told about an outage acts on nothing.
+     */
+    registerDevice: builder.mutation<{ registered: boolean }, { token: string; platform: string }>({
+      query: (device) => ({
+        url: '/api/v1/devices',
+        method: 'POST',
+        body: device,
+      }),
+    }),
+    forgetDevice: builder.mutation<{ registered: boolean }, string>({
+      query: (token) => ({
+        url: '/api/v1/devices',
+        method: 'DELETE',
+        body: { token },
+      }),
+    }),
     pollAll: builder.mutation<{ polled: number }, void>({
       query: () => ({
         url: '/api/v1/poll',
@@ -184,6 +202,8 @@ export const {
   useControlServiceMutation,
   useClearHistoryMutation,
   useSendTestAlertMutation,
+  useRegisterDeviceMutation,
+  useForgetDeviceMutation,
   usePollAllMutation,
   usePollProjectMutation,
 } = monitoringApi

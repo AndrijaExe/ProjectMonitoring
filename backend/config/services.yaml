@@ -29,8 +29,14 @@ services:
         alias: App\Adapter\Logs\RenderLogSource
         public: false
 
+    # Both routes at once. The two concrete channels stay injectable by class, so the fan-out
+    # can hold them without the interface pointing back at itself.
     App\Model\AlertChannel:
-        alias: App\Adapter\Alerting\ResendAlertChannel
+        alias: App\Adapter\Alerting\FanOutAlertChannel
+        public: false
+
+    App\Model\DeviceTokenStore:
+        alias: App\Adapter\Persistence\Postgres\PdoDeviceTokenStore
         public: false
 
     App\Model\ServiceControl:

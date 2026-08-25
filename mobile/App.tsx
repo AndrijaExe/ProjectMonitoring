@@ -5,12 +5,17 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { NavigationContainer, type Theme } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { Provider } from 'react-redux'
-import { monitoringApi, useGetSessionQuery } from '@shared/api/monitoringApi'
+import {
+  monitoringApi,
+  useForgetDeviceMutation,
+  useGetSessionQuery,
+} from '@shared/api/monitoringApi'
 import { clearToken, tokenRestored } from '@shared/store/authSlice'
 import { useAppDispatch, useAppSelector } from '@shared/store/hooks'
 import { store } from '@shared/store/store'
 import { persistToken } from '@shared/store/tokenPersistence'
 import { restoreApiBaseUrl } from './src/apiHost'
+import { issuedPushToken } from './src/push'
 import { readStoredToken, secureTokenStore } from './src/secureStorage'
 import { FleetScreen } from './src/screens/FleetScreen'
 import { ProjectScreen } from './src/screens/ProjectScreen'
@@ -130,6 +135,27 @@ function SignOutButton() {
   // Read from the session the sign-in screen already asked for, rather than kept as state of
   // its own, so a token restored from the keychain on a cold start is described correctly too.
   const session = useGetSessionQuery()
+  const [forgetDevice] = useForgetDeviceMutation()
+
+  /**
+   * Taking the phone off the alert list has to happen while the admin token is still in the
+   * store, so it goes first and the sign-out waits for it. A phone that signed out and kept
+   * buzzing would be the rudest bug in the app.
+   */
+  async function signOut(): Promise<void> {
+    const push = issuedPushToken()
+    if (push !== null) {
+      try {
+        await forgetDevice(push).unwrap()
+      } catch {
+        // Not worth keeping the operator signed in over. The server drops routes Expo reports
+        // as gone, so an orphaned registration stops on its own.
+      }
+    }
+
+    dispatch(clearToken())
+    dispatch(monitoringApi.util.resetApiState())
+  }
 
   return (
     <View style={styles.headerRight}>
@@ -139,12 +165,7 @@ function SignOutButton() {
           {session.data.readonly ? 'read-only' : 'full access'}
         </Text>
       )}
-      <Pressable
-        onPress={() => {
-          dispatch(clearToken())
-          dispatch(monitoringApi.util.resetApiState())
-        }}
-      >
+      <Pressable onPress={() => void signOut()}>
         <Text style={styles.signOut}>Sign out</Text>
       </Pressable>
     </View>
