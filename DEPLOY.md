@@ -78,10 +78,12 @@ warning at startup when the variable is empty.
 
 ## 4. Scheduled polling
 
-[`.github/workflows/poll.yml`](.github/workflows/poll.yml) calls `POST /api/v1/poll` once an
+[`.github/workflows/poll.yml`](.github/workflows/poll.yml) calls `POST /api/v1/poll` every half
 hour. Under Settings > Secrets and variables > Actions add:
 
-- Variable `API_URL` — `https://monitoring-api.onrender.com`
+- Variable `API_URL` — the API's own hostname, which is not a guess: Render appends a suffix
+  when a service name is taken, so read it off the service page. Here it is
+  `https://monitoring-api-0gy1.onrender.com`
 - Variable `WARM_URLS` — space separated target URLs, e.g. `https://loop9-backend.onrender.com/healthz`
 - Secret `ADMIN_TOKEN` — the generated value from step 3
 
@@ -103,14 +105,19 @@ Two things that will eventually bite:
   board goes quiet, check the Actions tab first.
 - **The poll interval is a budget, not a preference.** A workspace gets 750 free instance
   hours a month, shared by every free service in it, and a month is 730 hours. A service
-  stays up for 15 minutes after its last request, so an hourly poll costs each service a
-  quarter of the month, about 182 hours, and the API plus one game come to roughly 364.
-  A five-minute poll never lets either sleep: 1460 hours, and Render suspends every free
-  service in the workspace — the game included — until the next month. Shortening the cron
-  means paying for one of the two services. Watch the number on the Billing page.
-- GitHub Actions minutes are free here because the repository is public. On a private one,
-  hourly runs are fine, but five-minute runs would eat the 2,000 monthly minutes, since
-  GitHub rounds every job up to a full minute.
+  stays up for 15 minutes after its last request, so the monthly bill is a quarter of the
+  number of polls. Only services on the free plan spend from that budget: a static site
+  costs nothing, and a target on a paid plan is always awake anyway.
+
+  With `monitoring-api` the only free service, an hourly poll costs about 180 hours and a
+  half-hourly one about 360, which is where the cron sits — half of the allowance, and half
+  an hour is also the longest a push alert can be delayed. Every twenty minutes would be 540.
+  Anything under fifteen minutes never lets the API sleep at all, spends the whole 730 hour
+  month and leaves no margin before Render suspends every free service in the workspace.
+  Watch the number on the Billing page, and recount it whenever a target moves between plans.
+- GitHub Actions minutes are free here because the repository is public. On a private one the
+  half-hourly cron would cost about 1,440 of the 2,000 monthly minutes, since GitHub rounds
+  every job up to a full minute.
 
 ### The dead man's switch
 
@@ -198,7 +205,7 @@ Alert delivery never fails a poll. If Resend is unreachable the snapshot is stil
 a warning goes to the service log.
 
 The **Update status** button wakes the targets from your browser before the API probes them,
-so a manual check during the 45 minutes a free target spends asleep between hourly runs reads
+so a manual check during the quarter of an hour a free target spends asleep between runs reads
 the game rather than the edge. That is why the button says "Waking…" first and can take most
 of a minute.
 
@@ -279,8 +286,8 @@ using, and the monitor writes a warning into its own log — visible under **Mon
 fleet page — whenever the answer is memory.
 
 Counters are read only when the health probe just came back `ok`. Asking a sleeping instance
-would spend the timeout budget again to learn what the probe already reported, and with hourly
-polling that budget is the thing keeping the free plan affordable.
+would spend the timeout budget again to learn what the probe already reported, and that budget is
+the thing keeping the free plan affordable.
 
 ## 8. Stop, start and rebuild from the console (optional)
 
@@ -352,10 +359,10 @@ refused by everything else: stopping or rebuilding a service, clearing history, 
 alert. That is what makes it safe to keep on a device that leaves the house. Carrying the admin
 token instead would mean the most exposed copy of the credential is also the most powerful one.
 
-Probing is deliberately allowed. The schedule runs hourly, so a phone opened in between would
-otherwise show an hour-old board — a screenshot rather than a monitor. Pull down on either screen
-and it wakes the targets from the phone first, then asks the API to measure, for the reason in
-section 4.
+Probing is deliberately allowed. The schedule runs every half hour, so a phone opened in between
+would otherwise show a board half an hour stale — a screenshot rather than a monitor. Pull down on
+either screen and it wakes the targets from the phone first, then asks the API to measure, for the
+reason in section 4.
 
 Run it through Expo Go, which needs no build and no store:
 
@@ -376,13 +383,20 @@ needs a JDK 17 and the Android SDK, and no account:
 ```bash
 cd mobile
 npx expo prebuild -p android          # writes android/, which is gitignored and regenerable
-cd android && ./gradlew assembleRelease
+cd android && ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
 # app/build/outputs/apk/release/app-release.apk
 ```
 
-The APK comes out around 70 MB because a release build packs all four CPU architectures;
-trimming `reactNativeArchitectures` in `android/gradle.properties` to `arm64-v8a` roughly halves
-it and covers any phone from the last several years.
+Left alone, a release build packs all four CPU architectures and comes out at 73 MB. The flag
+above keeps only `arm64-v8a`, which covers any phone from the last several years, and brings it
+down to 28 MB. Pass it on the command line rather than editing `reactNativeArchitectures` in
+`android/gradle.properties`: `prebuild` regenerates that file and would silently drop the change.
+
+Use the SDK's own versions when adding libraries here — `npx expo install`, never plain
+`npm install`. npm takes the newest release, which for `expo-secure-store` meant a package from an
+older SDK line: it built cleanly and then died on launch looking for a class that
+`expo-modules-core` no longer carries. `npx expo-doctor` catches that class of mismatch in a
+second, and is worth running before every build.
 
 It is signed with React Native's debug keystore, which the template wires into the release build
 type. That is fine for a private app installed by hand — the phone will still warn about an
@@ -393,8 +407,53 @@ The header says which token is in use, `read-only` or `full access`, because the
 either and knowing which one is on the phone matters. No CORS entry is needed: a native app is
 not a browser origin.
 
-What it does not do is notify. Alerts still arrive by email, which needs no device token and no
-second delivery path to keep honest.
+## 10. Alerts on the phone (optional)
+
+Every alert that goes to the inbox is also pushed to the phones that registered themselves, so
+this section adds nothing to what gets said — only where it arrives. Nothing here is needed for
+the board to work: without it the fleet screen says "alerts off" and gives the reason.
+
+Android cannot deliver a push without Firebase Cloud Messaging, and that is true whether the send
+goes through Expo or through Google directly. So three things have to line up, and all three live
+outside this repository.
+
+**One, an Expo project id.** From `mobile/`, `npx eas init` creates the project and writes
+`extra.eas.projectId` into `app.json`. It needs a free Expo account. Without the id the app cannot
+ask for a push token at all, because the token is issued against a project.
+
+**Two, `google-services.json`.** In the [Firebase console](https://console.firebase.google.com)
+create a project, add an **Android** app with the package name `com.andrija.monitoring` — it must
+match `app.json` exactly or the build fails — and download the file into `mobile/`. It is
+gitignored, and [`app.config.js`](mobile/app.config.js) wires it in only when it is there, so a
+clone without it still builds a working board.
+
+**Three, the FCM key uploaded to Expo.** In Firebase go to Project settings > Service accounts,
+generate a private key, then from `mobile/` run `npx eas credentials`, pick Android, and upload it
+as **FCM V1**. This is what lets Expo's push service speak to Google on your behalf. Skipping it
+is the quiet failure mode: registration succeeds, the app reports alerts as on, and every send is
+refused.
+
+Then rebuild and reinstall the app — a push token is issued by native code, so Expo Go and an old
+APK cannot get one for this setup.
+
+Nothing needs configuring on the API. A phone posts its own token to `POST /api/v1/devices` on
+each sign-in and the token is stored in `device_tokens`; signing out takes it off the list, and
+any token Expo reports as `DeviceNotRegistered` is dropped on the next send. `EXPO_ACCESS_TOKEN`
+exists for the day an Expo account turns on enhanced security for pushes, and is otherwise unset.
+
+To check the whole path end to end, press **Send test alert** in the console. It goes through the
+same fan-out as a real alert, so a phone that is set up correctly buzzes within seconds. Only the
+full admin token may press it, which is why the phone cannot test itself.
+
+Two limits worth knowing before trusting it:
+
+- **An alert is only as fast as the poll.** Nothing watches continuously; the half-hourly schedule
+  in section 4 is the ceiling on how late an outage can be reported, and section 4 explains why
+  shortening it costs Render hours.
+- **Dead tokens are noticed on a send, not before.** Expo reports `DeviceNotRegistered` in the
+  ticket for the message that failed, so a phone that was reinstalled is dropped the first time an
+  alert is sent to it rather than in advance. Reinstalling between alerts therefore leaves one
+  stale row behind, which costs a refused message and nothing else.
 
 ## Free tier limits worth knowing
 

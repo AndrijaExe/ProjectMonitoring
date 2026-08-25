@@ -4,14 +4,18 @@ name: Poll health
 # API instance awake, which means the console usually loads without a cold start.
 on:
   schedule:
-    # Hourly, and the reason is money rather than politeness. A workspace gets 750 free
-    # instance hours a month, shared by every free service in it, and a month is 730 hours.
-    # Polling every five minutes never lets a service sleep, so two services awake around
-    # the clock would need 1460 hours and Render would suspend both partway through the
-    # month, the game included. An hourly poll wakes each service for its 15 minute idle
-    # window, which is a quarter of the time, so the pair costs about 364 hours and leaves
-    # room for real players.
-    - cron: '0 * * * *'
+    # Every half hour, and the interval is money rather than politeness. A workspace gets 750
+    # free instance hours a month; only monitoring-api spends them, because the console is a
+    # static site and the game is on a paid plan that is always awake anyway.
+    #
+    # A poll wakes the API for its 15 minute idle window, a quarter of an hour, so the monthly
+    # bill is a quarter of the number of polls: hourly costs 180 hours, half-hourly 360, every
+    # twenty minutes 540. Anything under fifteen minutes never lets it sleep at all and spends
+    # the whole 730 hour month, which leaves no margin before Render suspends the service.
+    #
+    # Half-hourly is also the ceiling on how late a push alert can be, which is the other half
+    # of why it is not hourly.
+    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 concurrency:

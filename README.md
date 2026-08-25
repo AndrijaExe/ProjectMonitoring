@@ -118,7 +118,7 @@ access at all.
 
 The split exists so the phone app can carry a secret that costs nothing if the phone is lost.
 Probing is deliberately on the reading side: without it a phone could only ever show whatever
-the hourly schedule last wrote, which on a sleeping free instance is an hour of nothing.
+the half-hourly schedule last wrote, which on a sleeping free instance is half an hour of nothing.
 
 A refusal aimed at the read-only token answers `403` with `code: "FORBIDDEN"`, while a token
 that is simply wrong answers `403` with `code: "UNAUTHORIZED"`. The clients sign out on the
@@ -136,8 +136,13 @@ probe them — the same order the console uses, and for the same reason.
 
 It reuses `shared/`, so the API client, the store and the model are the console's, not a second
 implementation that can drift. What it does not have is anything that acts: no service buttons,
-no clear history, no test alert. Push notifications are not in it either; alerts still arrive by
-email.
+no clear history, no test alert.
+
+Alerts do reach it. Every alert that goes to the inbox is also pushed to the phones registered
+with `/api/v1/devices`, which is the one write a read-only token may perform — asking to be told
+that something broke acts on nothing. Push needs a Firebase project and an Expo project id that
+cannot live in this repository; without them the app says "alerts off" on the fleet screen and
+works as a board regardless. Step 10 of [DEPLOY.md](DEPLOY.md) has the walkthrough.
 
 Running it on a device needs no CORS entry, because a native app is not a browser origin.
 

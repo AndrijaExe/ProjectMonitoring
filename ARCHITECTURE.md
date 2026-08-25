@@ -74,6 +74,7 @@ flowchart TB
 - Stop, start and rebuild a target's service at its host, from the project page
 - Split a project into health, AI usage, and logs, so spend is not buried under probes
 - Read the same board from a phone, with a token that can read and probe but not act
+- Push every alert to the registered phones as well as to the inbox
 
 Provider routing and Unreal remote control are still out of scope.
 
@@ -107,10 +108,20 @@ refused it.
 
 ## Alerts
 
-`AlertChannel` is a port; `ResendAlertChannel` posts to an HTTPS API rather than speaking SMTP,
-because Render blocks ports 25, 465 and 587 on free web services. `AnnounceHealthChange` holds
-the decision of what deserves a message, and it runs before the snapshot is written so the
-comparison reads history without the row about to join it.
+`AlertChannel` is a port with two implementations behind one alias. `ResendAlertChannel` posts to
+an HTTPS API rather than speaking SMTP, because Render blocks ports 25, 465 and 587 on free web
+services. `ExpoPushAlertChannel` sends the same alert to the phones. `FanOutAlertChannel` is what
+the interface actually resolves to and it sends down both routes, so neither sender knows there
+is more than one. `AnnounceHealthChange` holds the decision of what deserves a message, and it
+runs before the snapshot is written so the comparison reads history without the row about to
+join it.
+
+The two routes are not redundant. Mail is the record: it waits, it is searchable, it survives a
+flat battery. Push is the interruption, and only it arrives while the operator is away from a
+desk. The fan-out therefore judges failure by whether the human was reached rather than by
+whether every route worked — throwing because push failed while the mail went out would leave
+the alarm unrecorded and re-raise it on the next poll, charging the operator a duplicate mail
+every half hour for one broken route.
 
 The rule is that only conclusive transitions are announced. `throttled` and `timeout` say the
 probe could not see the target, so they are skipped entirely: they neither raise an alarm nor
@@ -334,9 +345,30 @@ Pull to refresh does what the console's button does — wake the targets from th
 ask the API to probe them — for the reason in the Probes section: the monitor cannot wake what it
 watches, and a probe sent to a sleeping free instance measures the network rather than the game.
 
-No push notifications. Alerts still arrive by email, which does not need a device token, an
-Expo credential or a second delivery path to keep honest. A native app needs no CORS entry
-either, not being a browser origin.
+A native app needs no CORS entry, not being a browser origin.
+
+### Alerts on the phone
+
+The app registers itself: it asks Android for permission, asks Expo for a push token, and posts
+that token to `/api/v1/devices`, which stores it in `device_tokens`. The table has no project
+column, because the app watches the whole fleet and a device told about one game only would be a
+worse monitor than the mail it supplements.
+
+Registration happens on every sign-in rather than once, because the operating system can retire a
+push route whenever it likes and the server drops any route Expo reports as `DeviceNotRegistered`.
+Saying "still here" on each start is how a phone comes back after that. Signing out unregisters
+first, while the admin token is still in the store — a phone that signed out and kept buzzing
+would be the rudest bug in the app.
+
+Three things outside this repository have to be true before a push arrives: a Firebase project
+whose `google-services.json` is in the build, an Expo project whose id is in the app config, and
+an FCM key uploaded to that Expo project. All three can be missing, and then the app says "alerts
+off" with the reason on the fleet screen instead of failing to open. `app.config.js` wires the
+Firebase file in only when it is present, so a clone without it still builds a working board.
+
+`POST /api/v1/devices` is the one write the read-only token may perform, and that is the point
+rather than an oversight: the read-only rule exists so a lost phone cannot touch the
+infrastructure, and asking to be told when something breaks touches nothing.
 
 ## Auth
 
@@ -362,9 +394,9 @@ would mean the most exposed copy of the credential is also the most powerful. Sh
 count as unset on both, so a half-filled environment fails closed rather than accepting `x`.
 
 Probing sits on the reading side deliberately. It writes a snapshot, so it is not a pure read,
-but a monitor that cannot ask for a fresh measurement is a screenshot: the schedule runs hourly
-and a phone opened in between would show an hour-old board, which is the opposite of what it is
-for. Nothing about a probe is destructive, and a target answering a question is not a change to
+but a monitor that cannot ask for a fresh measurement is a screenshot: the schedule runs every
+half hour and a phone opened in between would show a board that stale, which is the opposite of
+what it is for. Nothing about a probe is destructive, and a target answering a question is not a change to
 the target.
 
 A refusal aimed at the read-only token throws `WriteAccessDenied`, which reaches the client as
@@ -413,6 +445,8 @@ Postgres over plain PDO, no ORM. `DATABASE_URL` points at it; `docker-compose.ym
 | `projects` | Registry, keyed by `game_id`, with the ingest token hash |
 | `health_snapshots` | Every probe result, indexed on `(game_id, endpoint, checked_at DESC)` |
 | `metric_samples` | Ingested samples with `JSONB` tags, indexed on `(game_id, recorded_at DESC)` |
+| `metric_alarms` | One row per raised alarm, so a standing warning is mailed once and not every poll |
+| `device_tokens` | Phones to push alerts to. No `game_id`: the app watches the whole fleet |
 
 `php bin/console app:db-setup` creates missing tables and seeds the catalog. It is idempotent, so it is safe on every deploy.
 
