@@ -1,0 +1,25 @@
+{
+  "name": "project-monitoring",
+  "private": true,
+  "//": "Two clients over one API. The workspace exists so both can import shared/ and still find react and redux, which files above an app's own folder cannot do on their own.",
+  "workspaces": [
+    "frontend",
+    "mobile"
+  ],
+  "//overrides": "One copy of React for the whole workspace. Files in shared/ resolve it from here, and a hook called across two copies of React does not work. Without this an optional peer range pulls a second, newer copy to the root while both apps pin the version React Native is built against.",
+  "overrides": {
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "scripts": {
+    "dev": "npm run dev --workspace frontend",
+    "build": "npm run build --workspace frontend",
+    "//lint": "From the root, because most of the client code now lives in shared/ and linting one app's folder would miss it.",
+    "lint": "oxlint frontend/src shared mobile/src mobile/App.tsx",
+    "typecheck": "npm run typecheck --workspace mobile && npm run build --workspace frontend",
+    "mobile": "npm run start --workspace mobile"
+  },
+  "devDependencies": {
+    "oxlint": "^1.75.0"
+  }
+}

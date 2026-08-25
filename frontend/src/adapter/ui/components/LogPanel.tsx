@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
-import { useGetProjectLogsQuery, useGetSystemLogsQuery } from '../../api/monitoringApi'
-import { formatCheckedAt } from '../formatTime'
-import { useSeeMore } from '../useSeeMore'
+import { useGetProjectLogsQuery, useGetSystemLogsQuery } from '@shared/api/monitoringApi'
+import { formatCheckedAt } from '@shared/ui/formatTime'
+import { useSeeMore } from '@shared/ui/useSeeMore'
 import { SeeMore } from './SeeMore'
 
 type Props = {

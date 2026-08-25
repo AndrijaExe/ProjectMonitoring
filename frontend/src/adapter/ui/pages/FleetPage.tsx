@@ -1,15 +1,15 @@
 import { Link } from 'react-router-dom'
-import { displayStatus } from '../../../model/monitoring'
+import { displayStatus } from '@shared/model/monitoring'
 import {
   useGetOverviewQuery,
   usePollAllMutation,
   useSendTestAlertMutation,
-} from '../../api/monitoringApi'
+} from '@shared/api/monitoringApi'
 import { LogPanel } from '../components/LogPanel'
 import { StatusChip } from '../components/StatusChip'
 import { Shell } from '../components/Shell'
-import { formatCheckedAt } from '../formatTime'
-import { useStatusUpdate } from '../useStatusUpdate'
+import { formatCheckedAt } from '@shared/ui/formatTime'
+import { useStatusUpdate } from '@shared/ui/useStatusUpdate'
 
 export function FleetPage() {
   const { data, isLoading, isError, refetch } = useGetOverviewQuery(undefined, {

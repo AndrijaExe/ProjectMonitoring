@@ -42,9 +42,16 @@ prompted for:
 - `CORS_ALLOWED_ORIGINS` — the console URL, which does not exist yet. Enter
   `https://monitoring-console.onrender.com` as a best guess; step 3 confirms it.
 
-Everything else wires itself: `ADMIN_TOKEN` and `LOOP9_INGEST_TOKEN` are generated, and the
+Everything else wires itself: `ADMIN_TOKEN`, `ADMIN_READONLY_TOKEN` and `LOOP9_INGEST_TOKEN`
+are generated (the second one is the phone app's, see section 9), and the
 console build receives the API's hostname as `API_HOST`, which `vite.config.ts` turns into
 the base URL. No URL is hardcoded in source.
+
+One thing changed for consoles deployed before the phone app existed: the static site is now
+built from the repository root instead of `frontend/`, because it shares its API client with the
+phone app one level above. A blueprint sync applies that. If the console is instead wired by hand
+in the dashboard, clear its root directory, set the build command to
+`npm ci && npm run build --workspace frontend`, and publish `./frontend/dist`.
 
 ## 3. After the first deploy
 
@@ -329,6 +336,49 @@ runs without it. Players lose chat, Steam login and telemetry, and get connectio
 place, and no AI provider call can be made — which is where the real money goes. The softer brake
 still exists and is not this button: `GAME_GLOBAL_DAILY_QUOTA` on Loop 9 caps paid work per day
 while keeping logins and telemetry alive, at the cost of an environment change and a redeploy.
+
+## 9. The board on a phone (optional)
+
+`mobile/` is the same board, read-only, in Expo. It talks to the API deployed above and needs
+nothing hosted of its own.
+
+It signs in with `ADMIN_READONLY_TOKEN`, which [`render.yaml`](render.yaml) generates alongside
+the admin token. Read it once from `monitoring-api` > Environment. A service deployed before that
+line existed needs it added by hand — any private value of at least 16 characters; shorter counts
+as unset and read-only access simply stays off.
+
+**Why a second token.** This one reads the whole board and may ask for a fresh probe, and is
+refused by everything else: stopping or rebuilding a service, clearing history, sending a test
+alert. That is what makes it safe to keep on a device that leaves the house. Carrying the admin
+token instead would mean the most exposed copy of the credential is also the most powerful one.
+
+Probing is deliberately allowed. The schedule runs hourly, so a phone opened in between would
+otherwise show an hour-old board — a screenshot rather than a monitor. Pull down on either screen
+and it wakes the targets from the phone first, then asks the API to measure, for the reason in
+section 4.
+
+Run it through Expo Go, which needs no build and no store:
+
+```bash
+npm install     # at the repository root
+npm run mobile  # then scan the QR code with Expo Go
+```
+
+On the sign-in screen give it the API's URL — the real one from step 3, suffix included — and the
+read-only token. Both are kept in the device keychain, so this is a one-off. Setting
+`EXPO_PUBLIC_API_BASE_URL` in `mobile/.env.local` prefills the host; leaving it unset is the
+safer default, since an app with the wrong hostname baked in would need rebuilding to fix.
+
+For a standalone app on the phone rather than through Expo Go, `npx eas build -p android
+--profile preview` produces an installable APK. That needs an Expo account and a bundle
+identifier, and nothing else here depends on it.
+
+The header says which token is in use, `read-only` or `full access`, because the app accepts
+either and knowing which one is on the phone matters. No CORS entry is needed: a native app is
+not a browser origin.
+
+What it does not do is notify. Alerts still arrive by email, which needs no device token and no
+second delivery path to keep honest.
 
 ## Free tier limits worth knowing
 

@@ -3,18 +3,18 @@ import {
   useClearHistoryMutation,
   useGetProjectQuery,
   usePollProjectMutation,
-} from '../../api/monitoringApi'
+} from '@shared/api/monitoringApi'
 import { SeeMore } from '../components/SeeMore'
-import { useSeeMore } from '../useSeeMore'
+import { useSeeMore } from '@shared/ui/useSeeMore'
 import { LogPanel } from '../components/LogPanel'
 import { ProjectTabs, type ProjectTabId } from '../components/ProjectTabs'
 import { StatusChip } from '../components/StatusChip'
 import { ServicePanel } from '../components/ServicePanel'
 import { Shell } from '../components/Shell'
 import { UsagePanel } from '../components/UsagePanel'
-import { formatCheckedAt } from '../formatTime'
-import { isUsageMetric } from '../../../model/monitoring'
-import { useStatusUpdate } from '../useStatusUpdate'
+import { formatCheckedAt } from '@shared/ui/formatTime'
+import { isUsageMetric } from '@shared/model/monitoring'
+import { useStatusUpdate } from '@shared/ui/useStatusUpdate'
 
 function parseProjectTab(value: string | null): ProjectTabId {
   return value === 'usage' || value === 'logs' ? value : 'health'

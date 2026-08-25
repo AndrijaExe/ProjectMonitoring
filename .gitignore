@@ -3,8 +3,13 @@
 /backend/.env.local
 /backend/.env.local.php
 /backend/.env.*.local
+/node_modules/
 /frontend/node_modules/
 /frontend/dist/
+/mobile/node_modules/
+/mobile/.expo/
+/mobile/dist/
+/mobile/.env.local
 .phpunit.cache/
 .DS_Store
 response.json

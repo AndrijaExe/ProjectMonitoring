@@ -1,4 +1,4 @@
-import { displayStatus, type HealthStatus } from '../../../model/monitoring'
+import { displayStatus, type HealthStatus } from '@shared/model/monitoring'
 
 type StatusChipProps = {
   label?: string

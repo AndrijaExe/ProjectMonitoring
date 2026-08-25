@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
-import { monitoringApi } from '../../api/monitoringApi'
-import { clearToken } from '../../store/authSlice'
-import { useAppDispatch } from '../../store/hooks'
+import { monitoringApi } from '@shared/api/monitoringApi'
+import { clearToken } from '@shared/store/authSlice'
+import { useAppDispatch } from '@shared/store/hooks'
 
 type ShellProps = {
   children: ReactNode

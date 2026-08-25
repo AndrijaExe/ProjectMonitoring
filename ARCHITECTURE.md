@@ -1,6 +1,8 @@
 # ProjectMonitoring Architecture
 
-One repo, two apps. The backend is a Symfony 8 / PHP 8.4 JSON API. The frontend is a React + TypeScript SPA with Redux Toolkit Query.
+One repo, one API, two clients. The backend is a Symfony 8 / PHP 8.4 JSON API. The console is a
+React + TypeScript SPA with Redux Toolkit Query. The phone app is Expo / React Native and reads
+the same board.
 
 SRWA-style hexagonal / DDD-lite layout on both sides, matching the Loop 9 backend:
 
@@ -14,16 +16,26 @@ SRWA-style hexagonal / DDD-lite layout on both sides, matching the Loop 9 backen
 
 Dependencies point inward. HTTP adapters call application services. Application depends only on Model types and ports. The PDO stores and HttpClient implement those ports through aliases in `backend/config/services.yaml`.
 
-## Frontend
+## Clients
 
 | Layer | Path | Responsibility |
 |---|---|---|
-| Model | `frontend/src/model` | API-facing types and status helpers |
-| Adapter / API | `frontend/src/adapter/api` | RTK Query, `X-Admin-Token` |
-| Adapter / store | `frontend/src/adapter/store` | Auth token in sessionStorage |
-| Adapter / UI | `frontend/src/adapter/ui` | Login, fleet board, project detail |
+| Model | `shared/model` | API-facing types and status helpers |
+| Adapter / API | `shared/api` | RTK Query, `X-Admin-Token`, base URL injected at start-up |
+| Adapter / store | `shared/store` | Auth token in memory, persisted through a platform port |
+| Adapter / UI | `shared/ui` | Time and usage formatting, poll-and-wake, see-more |
+| Console UI | `frontend/src/adapter/ui` | Login, fleet board, project detail, service buttons |
+| Phone UI | `mobile/src` | Sign-in, fleet board, project detail, read-only |
 
 Pages never call `fetch`. A new screen adds a typed endpoint, then a page that selects from the cache.
+
+Everything above the two UI rows is shared, which is the point: a phone and a console disagreeing
+about a status word or a bill is worse than either being slightly wrong. Nothing in `shared/`
+touches a platform API, and the two things that used to — where the API lives, and where the token
+is kept — are handed in by whichever app is running. See [shared/README.md](shared/README.md).
+
+One copy of React serves both, enforced by an override at the workspace root. Files in `shared/`
+resolve React from there, and a hook called across two copies of React does not work.
 
 ## Request pipelines
 
@@ -61,6 +73,7 @@ flowchart TB
 - Mail the operator when a game's own counters misbehave, not only when it stops answering
 - Stop, start and rebuild a target's service at its host, from the project page
 - Split a project into health, AI usage, and logs, so spend is not buried under probes
+- Read the same board from a phone, with a token that can read and probe but not act
 
 Provider routing and Unreal remote control are still out of scope.
 
@@ -296,9 +309,39 @@ credential, not of the log.
 log before returning, and that log is what the fleet page shows. A monitor that can quietly erase
 its own evidence is worse than no monitor.
 
+## The phone app
+
+The board, read-only, in a pocket. Fleet overview, one project with health, usage and logs, and
+nothing that acts.
+
+It is a second client rather than a second implementation. The API client, the store, the model
+and the formatting all come from `shared/`, so what it can drift on is layout. Two differences
+from the console are worth naming:
+
+**The token survives a restart.** The console keeps it in `sessionStorage` and forgets it when
+the tab closes, because a browser might be on a shared machine. A phone is the operator's own,
+and asking them to retype a long secret to glance at the board would mean never glancing at it,
+so the token goes in the device keychain. Reading a keychain is asynchronous, which is why the
+auth slice carries `restored`: a screen that cannot tell "no token" from "not asked yet" flashes
+the sign-in form at somebody who is already signed in.
+
+**The host is typed in, not built in.** Render appends a suffix when a service name is taken, so
+the API's hostname is not something a build can be sure of, and an app with the wrong one baked
+in would need rebuilding to reach the right one. `EXPO_PUBLIC_API_BASE_URL` is honoured as a
+default; without it the app asks once and keeps the answer.
+
+Pull to refresh does what the console's button does — wake the targets from this device, then
+ask the API to probe them — for the reason in the Probes section: the monitor cannot wake what it
+watches, and a probe sent to a sleeping free instance measures the network rather than the game.
+
+No push notifications. Alerts still arrive by email, which does not need a device token, an
+Expo credential or a second delivery path to keep honest. A native app needs no CORS entry
+either, not being a browser origin.
+
 ## Auth
 
 - SPA: `ADMIN_TOKEN` posted to `/api/v1/auth/login`, then sent as `X-Admin-Token`
+- Phone: `ADMIN_READONLY_TOKEN` sent as `X-Admin-Token`, checked once at `/api/v1/auth/session`
 - Ingest API: per-project `X-Ingest-Token` compared to a SHA-256 hash
 - CORS: `CORS_ALLOWED_ORIGINS` lists the origins allowed to call `/api`. An unlisted origin
   gets no `Access-Control-Allow-Origin` header — there is no wildcard fallback, so a
@@ -306,6 +349,35 @@ its own evidence is worse than no monitor.
   Vite proxies `/api` anyway.
 - The container refuses to boot in `prod` with a missing, example, or too-short
   `ADMIN_TOKEN`, because the image carries development defaults in `.env`.
+
+### Two levels, and why the second one exists
+
+`AdminAuthenticator` answers two questions instead of one: may this caller read, and may it act.
+The full token does both. The read-only token reads and may ask for a probe, and every endpoint
+that changes something checks the second question separately.
+
+The reason is the phone. A device that leaves the house should not be able to take a service
+down, and the alternative — carrying the full token because that is the only one there is —
+would mean the most exposed copy of the credential is also the most powerful. Short secrets
+count as unset on both, so a half-filled environment fails closed rather than accepting `x`.
+
+Probing sits on the reading side deliberately. It writes a snapshot, so it is not a pure read,
+but a monitor that cannot ask for a fresh measurement is a screenshot: the schedule runs hourly
+and a phone opened in between would show an hour-old board, which is the opposite of what it is
+for. Nothing about a probe is destructive, and a target answering a question is not a change to
+the target.
+
+A refusal aimed at the read-only token throws `WriteAccessDenied`, which reaches the client as
+`403` with `code: "FORBIDDEN"` instead of `UNAUTHORIZED`. This is the same trap the `409` on a
+refused control action avoids, arrived at from the other direction: the clients end a session on
+`401` and `403` because that is what a rotated token looks like, so a refusal that means
+"correct token, wrong request" has to be distinguishable or a read-only client signs itself out
+of the board over a button it should never have been shown. The shared API client checks for that
+code before clearing the token.
+
+Read-only is header-only and cannot open a console session. Letting it in would produce a
+console full of controls that every click refuses, which is a worse answer than not offering
+them.
 
 ## Hosting
 
@@ -318,6 +390,11 @@ The API image is Apache + PHP 8.4 with `pdo_pgsql`, built in two stages so Compo
 ships into the runtime layer. `docker/entrypoint.sh` binds Apache to Render's `$PORT`,
 validates the admin token, and applies the schema before serving. The console build reads
 the API's public hostname from `API_HOST`, so no environment has a URL baked into source.
+
+The console is built from the repository root rather than from `frontend/`, because an install
+rooted there cannot reach `shared/` one level above it. Its build filter therefore watches
+`shared/` too: a change to the API client is a change to the console. The phone app is not
+hosted — it is built with EAS or run through Expo Go — so it has no service in the blueprint.
 
 `PostgresConnection` recognises a transaction-mode pooler (port 6543 or `pgbouncer=true`)
 and switches PDO to client-side prepared statements, since a pooled connection can hand

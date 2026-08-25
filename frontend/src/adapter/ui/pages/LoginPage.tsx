@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
-import { useLoginMutation } from '../../api/monitoringApi'
-import { setToken } from '../../store/authSlice'
-import { useAppDispatch, useAppSelector } from '../../store/hooks'
+import { useLoginMutation } from '@shared/api/monitoringApi'
+import { setToken } from '@shared/store/authSlice'
+import { useAppDispatch, useAppSelector } from '@shared/store/hooks'
 
 export function LoginPage() {
   const token = useAppSelector((state) => state.auth.token)

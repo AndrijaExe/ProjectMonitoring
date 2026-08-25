@@ -28,6 +28,12 @@ services:
       # Read it once in the dashboard: it is the sign-in password.
       - key: ADMIN_TOKEN
         generateValue: true
+      # The phone app's credential. Reads the whole board and may ask for a probe, but cannot
+      # stop a service, clear history or send mail, so a lost phone costs nothing but a rotation.
+      # Separate from the value above on purpose: glancing at the board from a pocket and taking
+      # a service down are not the same decision. Read it once in the dashboard.
+      - key: ADMIN_READONLY_TOKEN
+        generateValue: true
       - key: LOOP9_INGEST_TOKEN
         generateValue: true
       # Supabase connection string. Use a pooler URL, not the direct one: the direct host
@@ -79,13 +85,20 @@ services:
   - type: web
     name: monitoring-console
     runtime: static
-    rootDir: frontend
-    buildCommand: npm ci && npm run build
-    staticPublishPath: ./dist
+    # Built from the repository root rather than frontend/, because the console shares its API
+    # client and store with the phone app in shared/, and an install rooted at frontend/ cannot
+    # reach the folder above it. This installs the phone app's dependencies too, which is a
+    # minute of build time rather than a correctness problem.
+    buildCommand: npm ci && npm run build --workspace frontend
+    staticPublishPath: ./frontend/dist
     autoDeployTrigger: commit
     buildFilter:
       paths:
         - frontend/**
+        # A change to the shared client is a change to the console.
+        - shared/**
+        - package.json
+        - package-lock.json
     envVars:
       # RENDER_EXTERNAL_HOSTNAME is the public host of the API, so the console finds it
       # without anyone pasting a URL. vite.config.ts turns it into VITE_API_BASE_URL.

@@ -155,6 +155,15 @@ export type ServiceStatus = {
   note: string | null
 }
 
+export type SessionResponse = {
+  authenticated: boolean
+  /**
+   * True when the token may read the board but not act on it. A client that gets this hides
+   * the controls rather than offering buttons every click would refuse.
+   */
+  readonly: boolean
+}
+
 export function displayStatus(status: string | null | undefined): HealthStatus {
   if (
     status === 'ok' ||

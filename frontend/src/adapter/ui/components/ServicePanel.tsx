@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { useControlServiceMutation, useGetServiceStatusQuery } from '../../api/monitoringApi'
-import type { ServiceAction, ServiceState } from '../../../model/monitoring'
-import { formatCheckedAt } from '../formatTime'
+import { useControlServiceMutation, useGetServiceStatusQuery } from '@shared/api/monitoringApi'
+import type { ServiceAction, ServiceState } from '@shared/model/monitoring'
+import { formatCheckedAt } from '@shared/ui/formatTime'
 
 type Props = {
   gameId: string

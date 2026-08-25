@@ -1,28 +1,20 @@
-import type { ProjectCard, ProjectUsage, UsageDay, UsageProvider } from '../../../model/monitoring'
+import type { ProjectCard, ProjectUsage, UsageDay } from '@shared/model/monitoring'
+import {
+  USAGE_FAIR_USE as FAIR_USE,
+  USAGE_RELATED as RELATED,
+  formatCount,
+  formatDay,
+  formatUsd,
+  hasDayActivity,
+  uniqueProviders,
+  usageColorFor as colorFor,
+  valueFor,
+} from '@shared/ui/usage'
 
 type Props = {
   card: ProjectCard
   usage?: ProjectUsage
 }
-
-const RELATED: { name: string; label: string }[] = [
-  { name: 'chat.messages', label: 'chat replies' },
-  { name: 'ai.fallback', label: 'fell back to another provider' },
-  { name: 'ai.failed', label: 'provider failures' },
-  { name: 'safety.blocked', label: 'blocked by moderation' },
-  { name: 'safety.unavailable', label: 'moderation unavailable' },
-]
-
-const FAIR_USE: { name: string; label: string }[] = [
-  { name: 'abuse.watch', label: 'players who crossed the daily watch line' },
-  { name: 'chat.denied.player_daily', label: 'hit the daily player cap' },
-  { name: 'chat.denied.player_monthly', label: 'hit the monthly player cap' },
-  { name: 'chat.denied.ip_daily', label: 'hit the daily IP cap' },
-  { name: 'chat.denied.global', label: 'hit the global daily cap' },
-  { name: 'chat.denied.burst', label: 'burst-limited' },
-]
-
-const COLORS = ['#c6f54a', '#6ec8ff', '#f0c14a', '#d4a5ff', '#7f9486']
 
 /**
  * What the game's own counters say about paid AI work.
@@ -299,79 +291,3 @@ function DailyChart({ days }: { days: UsageDay[] }) {
   )
 }
 
-function uniqueProviders(days: UsageDay[]): UsageProvider[] {
-  const seen = new Map<string, UsageProvider>()
-  for (const day of days) {
-    for (const provider of day.providers) {
-      if (!seen.has(provider.id)) {
-        seen.set(provider.id, provider)
-      }
-    }
-  }
-
-  return [...seen.values()]
-}
-
-function valueFor(day: UsageDay, provider: UsageProvider, useCost: boolean): number {
-  const row = day.providers.find((item) => item.id === provider.id)
-  if (!row) {
-    return 0
-  }
-
-  return useCost ? row.cost_micros : row.tokens_in + row.tokens_out
-}
-
-function hasDayActivity(day: UsageDay): boolean {
-  return day.tokens_in > 0 || day.tokens_out > 0 || day.cost_micros > 0
-}
-
-function colorFor(id: string): string {
-  const known: Record<string, string> = {
-    openai: COLORS[0],
-    gemini: COLORS[1],
-    groq: COLORS[2],
-    all: COLORS[0],
-    unknown: COLORS[4],
-  }
-
-  if (known[id]) {
-    return known[id]
-  }
-
-  let hash = 0
-  for (const char of id) {
-    hash = (hash + char.charCodeAt(0)) % COLORS.length
-  }
-
-  return COLORS[hash]
-}
-
-function formatDay(isoDate: string): string {
-  const [year, month, day] = isoDate.split('-').map(Number)
-  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  })
-}
-
-function formatCount(value: number | undefined): string {
-  return value == null ? '—' : Math.round(value).toLocaleString('en-US')
-}
-
-function formatUsd(micros: number | undefined): string {
-  if (micros == null) {
-    return '—'
-  }
-
-  const usd = micros / 1_000_000
-  if (usd === 0) {
-    return '$0'
-  }
-
-  if (usd < 0.01) {
-    return `$${usd.toFixed(6).replace(/\.?0+$/, '')}`
-  }
-
-  return `$${usd.toFixed(2)}`
-}

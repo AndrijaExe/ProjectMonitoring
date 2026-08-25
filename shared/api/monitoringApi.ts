@@ -11,16 +11,19 @@ import type {
   ProjectDetail,
   ProjectLogs,
   ServiceAction,
+  SessionResponse,
   ServiceStatus,
-} from '../../model/monitoring'
+} from '../model/monitoring'
 import { clearToken } from '../store/authSlice'
+import { getApiBaseUrl } from './config'
 
 type AuthRoot = {
   auth: { token: string | null }
 }
 
 const rawBaseQuery = fetchBaseQuery({
-  baseUrl: import.meta.env.VITE_API_BASE_URL ?? '',
+  // Resolved per request in baseQuery below, because the host is not known at module load.
+  baseUrl: '',
   prepareHeaders: (headers, { getState }) => {
     const token = (getState() as AuthRoot).auth.token
     if (token) {
@@ -31,18 +34,32 @@ const rawBaseQuery = fetchBaseQuery({
   },
 })
 
+/**
+ * True when the server said the token is fine but the request was out of scope.
+ *
+ * A read-only token gets this for anything that acts. Treating it as a dead token would sign
+ * the operator out of the board over a button that should never have been offered.
+ */
+function isOutOfScope(error: FetchBaseQueryError): boolean {
+  const data = (error as { data?: { error?: { code?: unknown } } }).data
+  return data?.error?.code === 'FORBIDDEN'
+}
+
 const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (
   args,
   api,
   extraOptions,
 ) => {
-  const result = await rawBaseQuery(args, api, extraOptions)
+  const prefix = getApiBaseUrl()
+  const withHost = typeof args === 'string' ? { url: prefix + args } : { ...args, url: prefix + args.url }
+
+  const result = await rawBaseQuery(withHost, api, extraOptions)
   // These two statuses are reserved for the token being unusable, because this is what happens
   // when one arrives: the session ends. An endpoint refusing a request for any other reason has
   // to say so with a different code, or it signs the operator out mid-incident.
   if (result.error && (result.error.status === 401 || result.error.status === 403)) {
     const url = typeof args === 'string' ? args : args.url
-    if (!url.includes('/auth/login')) {
+    if (!url.includes('/auth/login') && !isOutOfScope(result.error)) {
       api.dispatch(clearToken())
     }
   }
@@ -54,12 +71,19 @@ export const monitoringApi = createApi({
   baseQuery,
   tagTypes: ['Overview', 'Project', 'Service'],
   endpoints: (builder) => ({
-    login: builder.mutation<{ authenticated: boolean }, string>({
+    login: builder.mutation<SessionResponse, string>({
       query: (token) => ({
         url: '/api/v1/auth/login',
         method: 'POST',
         body: { token },
       }),
+    }),
+    /**
+     * Accepts either token, so this is how a client checks what its secret is worth. The phone
+     * app uses it instead of login, which only takes the token that may act.
+     */
+    getSession: builder.query<SessionResponse, void>({
+      query: () => '/api/v1/auth/session',
     }),
     getOverview: builder.query<OverviewResponse, void>({
       query: () => '/api/v1/overview',
@@ -150,6 +174,8 @@ export const monitoringApi = createApi({
 
 export const {
   useLoginMutation,
+  useGetSessionQuery,
+  useLazyGetSessionQuery,
   useGetOverviewQuery,
   useGetProjectQuery,
   useGetProjectLogsQuery,

@@ -3,26 +3,25 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "//react": "Pinned rather than ranged, to the version React Native is built against, so the workspace holds a single copy. Files in shared/ resolve React from the repository root, and a hook called across two copies of React does not work.",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "oxlint",
     "preview": "vite preview"
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.12.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
     "react-redux": "^9.3.0",
     "react-router-dom": "^7.18.2"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
-    "@types/react": "^19.2.17",
+    "@types/react": "~19.2.2",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.4",
-    "oxlint": "^1.75.0",
-    "typescript": "~6.0.2",
+    "typescript": "~6.0.3",
     "vite": "^8.2.0"
   }
 }
