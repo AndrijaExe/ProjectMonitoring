@@ -36,6 +36,12 @@ final class ServiceControlController
 
         $action = null;
         if ($request->isMethod('POST')) {
+            // Reading the panel is one decision, taking a service down is another. The
+            // read-only token gets the state and stops here.
+            if (!$this->authenticator->canWrite($request)) {
+                throw new WriteAccessDenied('This token may not control services.');
+            }
+
             /** @var array<string, mixed> $body */
             $body = json_decode($request->getContent() ?: '{}', true) ?: [];
 

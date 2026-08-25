@@ -32,7 +32,7 @@ final class DashboardController
         if ($request->isMethod('OPTIONS')) {
             return new JsonResponse(null, 204);
         }
-        $this->requireAdmin($request);
+        $this->requireWrite($request);
 
         try {
             return new JsonResponse($this->clearHistory->execute($gameId));
@@ -86,6 +86,18 @@ final class DashboardController
     {
         if (!$this->authenticator->isAuthenticated($request)) {
             throw new AccessDeniedHttpException('Admin token required.');
+        }
+    }
+
+    /**
+     * Clearing the history is not a reading. A read-only token stops here.
+     */
+    private function requireWrite(Request $request): void
+    {
+        $this->requireAdmin($request);
+
+        if (!$this->authenticator->canWrite($request)) {
+            throw new WriteAccessDenied('This token may not clear history.');
         }
     }
 }

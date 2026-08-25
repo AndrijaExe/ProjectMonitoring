@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Adapter\Http\EventSubscriber;
 
+use App\Adapter\Http\WriteAccessDenied;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -31,7 +32,13 @@ final class ApiExceptionSubscriber implements EventSubscriberInterface
         }
 
         $exception = $event->getThrowable();
-        if ($exception instanceof HttpExceptionInterface) {
+        if ($exception instanceof WriteAccessDenied) {
+            // Checked before the status match below: this is a 403 that must not read as a
+            // dead token, or a read-only client signs itself out over it.
+            $statusCode = $exception->getStatusCode();
+            $publicMessage = $exception->getMessage();
+            $code = WriteAccessDenied::CODE;
+        } elseif ($exception instanceof HttpExceptionInterface) {
             $statusCode = $exception->getStatusCode();
             $publicMessage = $statusCode >= 500 ? 'Internal server error.' : $exception->getMessage();
             $code = match ($statusCode) {

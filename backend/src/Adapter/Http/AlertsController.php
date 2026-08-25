@@ -30,6 +30,12 @@ final class AlertsController
             throw new AccessDeniedHttpException('Admin token required.');
         }
 
+        // Sends real mail to the operator's inbox, so it is not something a read-only
+        // credential on a phone gets to do.
+        if (!$this->authenticator->canWrite($request)) {
+            throw new WriteAccessDenied('This token may not send alerts.');
+        }
+
         return new JsonResponse($this->testAlert->execute());
     }
 }

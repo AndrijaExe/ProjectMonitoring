@@ -34,9 +34,15 @@ final class AdminAuthController
             throw new AccessDeniedHttpException('Token rejected.');
         }
 
-        return new JsonResponse(['authenticated' => true]);
+        // Only the full token signs in here, so this answer is never read-only.
+        return new JsonResponse(['authenticated' => true, 'readonly' => false]);
     }
 
+    /**
+     * Accepts either token, which makes it the one endpoint a client can use to find out what
+     * its secret is worth. The phone app checks a pasted token here rather than at /auth/login,
+     * because login is for the token that may act and would refuse a read-only one.
+     */
     #[Route('/api/v1/auth/session', name: 'admin_session', methods: ['GET', 'OPTIONS'])]
     public function session(Request $request): JsonResponse
     {
@@ -48,6 +54,9 @@ final class AdminAuthController
             throw new AccessDeniedHttpException('Admin token required.');
         }
 
-        return new JsonResponse(['authenticated' => true]);
+        return new JsonResponse([
+            'authenticated' => true,
+            'readonly' => $this->authenticator->isReadOnly($request),
+        ]);
     }
 }
