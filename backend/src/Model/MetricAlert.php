@@ -38,6 +38,7 @@ final readonly class MetricAlert implements Notification
         return match (true) {
             $key === 'rate:chat.denied.player_daily' => 'a player hit the daily chat cap',
             $key === 'rate:chat.denied.player_monthly' => 'a player hit the monthly chat cap',
+            $key === 'rate:chat.denied.global' => 'the game hit its global daily chat quota',
             $key === 'rate:abuse.watch' => 'a player is chatting far more than a normal run',
             str_starts_with($key, 'rate:') => sprintf('%s is rising faster than its limit', substr($key, 5)),
             $key === 'quiet' => 'nothing counted for a day',

@@ -232,14 +232,23 @@ The fourth needs a number, because only you know what "too many" means for your 
 `monitoring-api` > Environment set `ALERT_RATE_PER_HOUR` to comma separated `name=limit` pairs:
 
 ```
-api.errors=20,ai.failed=10,safety.unavailable=10,chat.denied.player_daily=0,chat.denied.player_monthly=0,abuse.watch=0
+api.errors=20,ai.failed=10,safety.unavailable=10,chat.denied.player_daily=0,chat.denied.player_monthly=0,chat.denied.global=0,abuse.watch=0
 ```
 
-Loop 9 publishes `chat.messages`, `chat.denied`, `chat.denied.player_daily`, `abuse.watch`,
-`api.errors`, `ai.fallback`, `ai.failed`, `safety.blocked`, `safety.unavailable`, `auth.issued`,
-`auth.rejected` and `run.ended`, so any of those can be given a ceiling. A ceiling of `0` mails
-on the first event in the hour — that is how a farmer hitting a quota shows up. A typo is ignored rather than fatal: a bad pair is dropped and
-the poll still records health. Leave the variable empty and no rate alarm exists.
+Loop 9 publishes `chat.messages`, `chat.denied`, `chat.denied.player_daily`,
+`chat.denied.player_monthly`, `chat.denied.global`, `abuse.watch`, `api.errors`, `ai.fallback`,
+`ai.failed`, `safety.blocked`, `safety.unavailable`, `auth.issued`, `auth.rejected` and
+`run.ended`, so any of those can be given a ceiling. A ceiling of `0` mails on the first event
+in the hour — that is how a farmer hitting a quota shows up. A typo is ignored rather than fatal:
+a bad pair is dropped and the poll still records health. Leave the variable empty and no rate
+alarm exists.
+
+Two of those carry advice in the mail, because the number alone does not say what to do.
+`chat.denied.global` means the whole game hit its daily chat quota and every player is being
+told the service is at capacity; if the traffic is real, raise `GAME_GLOBAL_DAILY_QUOTA` on the
+game's Render service, which applies without a new build. `abuse.watch` means one player is
+chatting far beyond a normal run; the player hash is in the game's log, and no quota should move
+for one farmer.
 
 Each alarm is mailed once when it opens and once when it clears, the same as a probe alert, and
 the state lives in the `metric_alarms` table. An alarm whose mail could not be delivered is not

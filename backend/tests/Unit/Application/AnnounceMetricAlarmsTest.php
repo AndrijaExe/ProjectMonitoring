@@ -149,6 +149,25 @@ final class AnnounceMetricAlarmsTest extends TestCase
         self::assertSame([], array_keys($state->raised(GameId::fromString('loop9'))));
     }
 
+    public function testTheGlobalChatQuotaAlarmNamesTheKnobToTurn(): void
+    {
+        $metrics = new InMemoryMetricStore();
+        // A ceiling of zero: the first refused player in the hour is the alarm.
+        $this->record($metrics, 'chat.denied.global', 0.0, '-90 minutes');
+        $this->record($metrics, 'chat.denied.global', 1.0, '-1 minute');
+
+        $channel = new FakeAlertChannel();
+        $this->announcer($metrics, new InMemoryAlarmStateStore(), $channel, 'chat.denied.global=0,abuse.watch=0')
+            ->forReading($this->project(), $this->reading(), [], $this->now());
+
+        // Only the quota that was actually crossed rings; abuse.watch stayed at nothing.
+        self::assertCount(1, $channel->sent);
+        self::assertStringContainsString('chat.denied.global is rising fast', $channel->sent[0]->subject());
+        // An operator reading this at launch needs the knob, not a search through the docs.
+        self::assertStringContainsString('service is at capacity', $channel->sent[0]->body());
+        self::assertStringContainsString('GAME_GLOBAL_DAILY_QUOTA', $channel->sent[0]->body());
+    }
+
     private function announcer(
         InMemoryMetricStore $metrics,
         InMemoryAlarmStateStore $state,

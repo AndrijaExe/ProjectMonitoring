@@ -30,6 +30,23 @@ final class AnnounceMetricAlarms
     private const RATE_WINDOW_HOURS = 1;
     private const QUIET_WINDOW_HOURS = 24;
 
+    /**
+     * What to do about a counter, for the ones where the number alone does not say. A ceiling
+     * of zero on chat.denied.global means the mail arrives on the first refused player, and the
+     * operator reading it at launch needs the name of the knob, not a search through the docs.
+     *
+     * @var array<string, list<string>>
+     */
+    private const ADVICE = [
+        'chat.denied.global' => [
+            'The game hit its global daily chat quota: players are being told the service is at capacity.',
+            'If the traffic is legitimate, raise GAME_GLOBAL_DAILY_QUOTA on the game\'s Render service; it applies without a cook.',
+        ],
+        'abuse.watch' => [
+            'A single player is chatting far beyond a normal run. Find the player hash in the game\'s log before touching any quota.',
+        ],
+    ];
+
     /** @var array<string, float> */
     private readonly array $rateLimits;
 
@@ -100,6 +117,7 @@ final class AnnounceMetricAlarms
                 $alerts[] = new MetricAlert($project, 'rate:'.$name, sprintf('%s is rising fast', $name), [
                     sprintf('%s grew by %s in the last hour.', $name, self::number($grown)),
                     sprintf('The configured ceiling is %s per hour.', self::number($limit)),
+                    ...(self::ADVICE[$name] ?? []),
                 ]);
             }
         }
