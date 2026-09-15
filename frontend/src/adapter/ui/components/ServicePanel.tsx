@@ -36,28 +36,25 @@ export function ServicePanel({ gameId, displayName }: Props) {
   // A deploy takes minutes and its progress is the one thing an operator waits on, so a service
   // mid-change is asked about often and a settled one is left alone. Every ask is a call to the
   // host, which counts them.
-  const [pollMs, setPollMs] = useState(SETTLED_MS)
-  const { data, isLoading, isError } = useGetServiceStatusQuery(gameId, {
-    pollingInterval: pollMs,
-  })
-  const [control, result] = useControlServiceMutation()
   // Accepted by the host, not yet visible in what it reports. Render answers these calls before
   // the change takes effect, so without remembering the request the panel would re-enable the
   // buttons over a state that is already out of date and invite the same press twice.
   const [pending, setPending] = useState<ServiceAction | null>(null)
+  // The interval depends on what the last read said, so read the cached answer first (no
+  // polling of its own) and let the second subscription below do the asking.
+  const { busy } = useGetServiceStatusQuery(gameId, {
+    selectFromResult: ({ data: cached }) => ({ busy: cached?.state?.busy === true }),
+  })
+
+  // A request counts as landed the moment the host reports the state it asked for; the
+  // patience timer below clears the record so a host that never agrees cannot pin the panel.
+  const { data, isLoading, isError } = useGetServiceStatusQuery(gameId, {
+    pollingInterval: busy || pending !== null ? WATCHING_MS : SETTLED_MS,
+  })
+  const [control, result] = useControlServiceMutation()
 
   const state = data?.state ?? null
-  const waiting = pending !== null
-
-  useEffect(() => {
-    setPollMs(state?.busy === true || waiting ? WATCHING_MS : SETTLED_MS)
-  }, [state?.busy, waiting])
-
-  useEffect(() => {
-    if (pending !== null && state !== null && landed(pending, state)) {
-      setPending(null)
-    }
-  }, [pending, state])
+  const waiting = pending !== null && !(state !== null && landed(pending, state))
 
   useEffect(() => {
     if (pending === null) {
