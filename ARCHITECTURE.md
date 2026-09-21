@@ -45,12 +45,15 @@ flowchart TB
     Login["POST /api/v1/auth/login"]
     Board["GET /api/v1/overview"]
     Detail["GET /api/v1/projects/gameId"]
+    Report["GET /api/v1/projects/gameId/report?period"]
     Poll["POST /api/v1/poll"]
   end
   subgraph api [Token APIs]
     I["POST /api/v1/projects/gameId/metrics"]
     O["POST /api/v1/projects/gameId/poll"]
   end
+  Report --> ReportUC[GetProjectReport]
+  ReportUC --> Store
   Board --> Overview[GetMonitoringOverview]
   I --> Ingest[IngestMetricBatch]
   Poll --> Snapshot[RecordHealthSnapshot]
@@ -75,6 +78,7 @@ flowchart TB
 - Split a project into health, AI usage, and logs, so spend is not buried under probes
 - Read the same board from a phone, with a token that can read and probe but not act
 - Push every alert to the registered phones as well as to the inbox
+- Cut every counter into days, ISO weeks or calendar months (UTC), the newest bucket marked as still filling, so this week can be read against last week at the same point
 
 Provider routing and Unreal remote control are still out of scope.
 

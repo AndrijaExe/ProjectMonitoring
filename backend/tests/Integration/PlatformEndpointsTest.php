@@ -78,6 +78,42 @@ final class PlatformEndpointsTest extends WebTestCase
         self::assertIsArray($payload['usage']['last_24h'] ?? null);
     }
 
+    public function testProjectReportCutsCountersIntoBuckets(): void
+    {
+        $client = static::createClient();
+        $client->request('GET', '/api/v1/projects/loop9/report?period=month', server: [
+            'HTTP_X_ADMIN_TOKEN' => 'test-admin-token-ok',
+        ]);
+
+        self::assertResponseIsSuccessful();
+        $payload = json_decode($client->getResponse()->getContent() ?: '', true);
+        self::assertIsArray($payload);
+        self::assertSame('loop9', $payload['game_id'] ?? null);
+        self::assertSame('month', $payload['period'] ?? null);
+        self::assertCount(12, $payload['buckets'] ?? []);
+        self::assertFalse($payload['buckets'][11]['complete'] ?? null);
+        self::assertIsArray($payload['buckets'][11]['totals'] ?? null);
+        self::assertIsArray($payload['buckets'][11]['usage']['providers'] ?? null);
+
+        // No period means a week: the grain an operator checks on most.
+        $client->request('GET', '/api/v1/projects/loop9/report', server: [
+            'HTTP_X_ADMIN_TOKEN' => 'test-admin-token-ok',
+        ]);
+        self::assertResponseIsSuccessful();
+        $payload = json_decode($client->getResponse()->getContent() ?: '', true);
+        self::assertSame('week', $payload['period'] ?? null);
+    }
+
+    public function testProjectReportRefusesAPeriodItDoesNotHave(): void
+    {
+        $client = static::createClient();
+        $client->request('GET', '/api/v1/projects/loop9/report?period=quarter', server: [
+            'HTTP_X_ADMIN_TOKEN' => 'test-admin-token-ok',
+        ]);
+
+        self::assertResponseStatusCodeSame(400);
+    }
+
     public function testProjectDetailRejectsUnknownGame(): void
     {
         $client = static::createClient();

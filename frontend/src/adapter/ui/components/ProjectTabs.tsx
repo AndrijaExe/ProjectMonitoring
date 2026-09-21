@@ -1,6 +1,7 @@
-export type ProjectTabId = 'health' | 'usage' | 'logs'
+export type ProjectTabId = 'overview' | 'health' | 'usage' | 'logs'
 
 const TABS: { id: ProjectTabId; label: string }[] = [
+  { id: 'overview', label: 'Overview' },
   { id: 'health', label: 'Health' },
   { id: 'usage', label: 'Usage' },
   { id: 'logs', label: 'Logs' },
@@ -12,8 +13,8 @@ type Props = {
 }
 
 /**
- * The three things an operator comes here to look at, kept apart so a page of probes
- * does not bury the spend or the lines that explain it.
+ * The four things an operator comes here to look at, kept apart so a page of probes
+ * does not bury the numbers, the spend or the lines that explain them.
  */
 export function ProjectTabs({ active, onChange }: Props) {
   return (

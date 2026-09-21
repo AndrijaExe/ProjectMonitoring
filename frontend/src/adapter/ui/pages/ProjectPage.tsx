@@ -2,6 +2,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import {
   useClearHistoryMutation,
   useGetProjectQuery,
+  useGetProjectReportQuery,
   usePollProjectMutation,
 } from '@shared/api/monitoringApi'
 import { SeeMore } from '../components/SeeMore'
@@ -12,31 +13,34 @@ import { StatusChip } from '../components/StatusChip'
 import { ServicePanel } from '../components/ServicePanel'
 import { Shell } from '../components/Shell'
 import { UsagePanel } from '../components/UsagePanel'
+import { OverviewPanel } from '../components/OverviewPanel'
+import { PeriodSwitch } from '../components/PeriodSwitch'
 import { formatCheckedAt } from '@shared/ui/formatTime'
-import { isUsageMetric } from '@shared/model/monitoring'
+import { parseReportPeriod } from '@shared/model/monitoring'
 import { useStatusUpdate } from '@shared/ui/useStatusUpdate'
 
 function parseProjectTab(value: string | null): ProjectTabId {
-  return value === 'usage' || value === 'logs' ? value : 'health'
+  return value === 'usage' || value === 'logs' || value === 'health' ? value : 'overview'
 }
 
 export function ProjectPage() {
   const { gameId = '' } = useParams()
   const [params, setParams] = useSearchParams()
   const tab = parseProjectTab(params.get('tab'))
+  const period = parseReportPeriod(params.get('period'))
   const { data, isLoading, isError } = useGetProjectQuery(gameId, {
     skip: gameId === '',
     pollingInterval: 30_000,
   })
+  // Fetched on every tab, so switching to Overview is instant and the Usage tab can share it.
+  const report = useGetProjectReportQuery(
+    { gameId, period },
+    { skip: gameId === '', pollingInterval: 60_000 },
+  )
   const [pollProject] = usePollProjectMutation()
   const status = useStatusUpdate(() => pollProject(gameId))
   const [clearHistory, clearState] = useClearHistoryMutation()
   const history = useSeeMore(data?.health_history ?? [])
-  const metrics = useSeeMore(
-    (data?.recent_metrics ?? []).filter(
-      (metric) => !isUsageMetric(metric.name),
-    ),
-  )
 
   if (isLoading) {
     return (
@@ -62,14 +66,7 @@ export function ProjectPage() {
   }
 
   const card = data.project
-  const gauges = Object.entries(card.metrics.gauges ?? {}).filter(
-    ([name]) => !name.startsWith('abuse.'),
-  )
   const heaviest = card.metrics.gauges?.['abuse.chats.heaviest']
-  // Token spend has its own tab, so the health lane keeps the rest of what players did.
-  const counters = Object.entries(card.metrics.totals_24h).filter(
-    ([name]) => !isUsageMetric(name),
-  )
   // The newest gauge row rather than the newest row of any kind, so the timestamp under the
   // levels is when the levels were read and not when anything at all was.
   const lastGaugeAt =
@@ -160,7 +157,7 @@ export function ProjectPage() {
         active={tab}
         onChange={(next) => {
           const nextParams = new URLSearchParams(params)
-          if (next === 'health') {
+          if (next === 'overview') {
             nextParams.delete('tab')
           } else {
             nextParams.set('tab', next)
@@ -169,9 +166,37 @@ export function ProjectPage() {
         }}
       />
 
+      {tab === 'overview' || tab === 'usage' ? (
+        <div className="period-row">
+          <PeriodSwitch
+            value={period}
+            onChange={(next) => {
+              const nextParams = new URLSearchParams(params)
+              if (next === 'week') {
+                nextParams.delete('period')
+              } else {
+                nextParams.set('period', next)
+              }
+              setParams(nextParams, { replace: true })
+            }}
+          />
+          {report.isError ? <span className="alert">The report could not be read.</span> : null}
+        </div>
+      ) : null}
+
+      {tab === 'overview' ? (
+        <OverviewPanel
+          card={card}
+          report={report.data}
+          period={period}
+          loading={report.isLoading}
+          lastGaugeAt={lastGaugeAt}
+        />
+      ) : null}
+
       {tab === 'health' ? (
         <>
-          <section className="split">
+          <section className="split split-single">
             <article>
               <h2>Health history</h2>
               {data.health_history.length === 0 ? (
@@ -213,82 +238,15 @@ export function ProjectPage() {
                 onLess={history.showLess}
               />
             </article>
-            <article>
-              <h2>Game numbers</h2>
-              {gauges.length > 0 ? (
-                <>
-                  <h3>Right now</h3>
-                  <ul className="totals">
-                    {gauges.map(([name, value]) => (
-                      <li key={name}>
-                        <span>{name}</span>
-                        <span className="mono">{value}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  {/* A level is only as true as the moment it was read. */}
-                  <p className="meta">read {formatCheckedAt(lastGaugeAt)}</p>
-                </>
-              ) : null}
-              <h3>Last 24h</h3>
-              {counters.length > 0 ? (
-                <ul className="totals">
-                  {counters.map(([name, total]) => (
-                    <li key={name}>
-                      <span>{name}</span>
-                      <span className="mono">{total}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                // Said here rather than left to the reader, who would otherwise take an empty
-                // list as a broken pipe. The counts move when players do, and probes are not players.
-                <p className="empty">
-                  Nothing counted yet. The game counts what players do — messages, logins, finished
-                  runs, errors — so these stay empty until somebody plays.
-                </p>
-              )}
-              {data.recent_metrics.length === 0 ? (
-                <p className="empty">
-                  No reading taken yet. The game's numbers are read on every poll that finds it up.
-                </p>
-              ) : (
-                <>
-                  <h3>Readings</h3>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>When</th>
-                        <th>Name</th>
-                        <th>Value</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {metrics.visible.map((metric) => (
-                        <tr key={`${metric.name}-${metric.recorded_at}-${metric.value}`}>
-                          <td className="mono">{formatCheckedAt(metric.recorded_at)}</td>
-                          <td>{metric.name}</td>
-                          <td className="mono">{metric.value}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </>
-              )}
-              <SeeMore
-                hidden={metrics.hidden}
-                expanded={metrics.expanded}
-                onMore={metrics.showMore}
-                onLess={metrics.showLess}
-              />
-            </article>
           </section>
 
           <ServicePanel gameId={card.game_id} displayName={card.display_name} />
         </>
       ) : null}
 
-      {tab === 'usage' ? <UsagePanel card={card} usage={data.usage} /> : null}
+      {tab === 'usage' ? (
+        <UsagePanel card={card} usage={data.usage} report={report.data} period={period} />
+      ) : null}
 
       {tab === 'logs' ? <LogPanel title="Logs" gameId={card.game_id} /> : null}
     </Shell>

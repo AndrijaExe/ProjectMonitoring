@@ -8,10 +8,13 @@ use App\Adapter\Auth\AdminAuthenticator;
 use App\Application\ClearHealthHistory;
 use App\Application\GetMonitoringOverview;
 use App\Application\GetProjectDetail;
+use App\Application\GetProjectReport;
+use App\Application\ReportPeriod;
 use App\Application\RecordHealthSnapshot;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
@@ -21,6 +24,7 @@ final class DashboardController
         private readonly AdminAuthenticator $authenticator,
         private readonly GetMonitoringOverview $overview,
         private readonly GetProjectDetail $projectDetail,
+        private readonly GetProjectReport $projectReport,
         private readonly RecordHealthSnapshot $recordHealthSnapshot,
         private readonly ClearHealthHistory $clearHistory,
     ) {
@@ -62,6 +66,27 @@ final class DashboardController
 
         try {
             return new JsonResponse($this->projectDetail->execute($gameId)->toArray());
+        } catch (\InvalidArgumentException) {
+            throw new NotFoundHttpException('Unknown project.');
+        }
+    }
+
+    #[Route('/api/v1/projects/{gameId}/report', name: 'project_report', methods: ['GET', 'OPTIONS'])]
+    public function report(Request $request, string $gameId): JsonResponse
+    {
+        if ($request->isMethod('OPTIONS')) {
+            return new JsonResponse(null, 204);
+        }
+        $this->requireAdmin($request);
+
+        $raw = $request->query->get('period');
+        $period = ReportPeriod::tryFrom(strtolower(trim((string) $raw)));
+        if ($raw !== null && $period === null) {
+            throw new BadRequestHttpException('period must be one of day, week, month.');
+        }
+
+        try {
+            return new JsonResponse($this->projectReport->execute($gameId, $period ?? ReportPeriod::Week)->toArray());
         } catch (\InvalidArgumentException) {
             throw new NotFoundHttpException('Unknown project.');
         }

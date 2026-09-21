@@ -44,6 +44,13 @@ npm run dev
 
 Open `http://127.0.0.1:5173`, sign in with `ADMIN_TOKEN`, then **Poll all now**.
 
+A project page opens on **Overview**: the game's counters cut by day, week or month (the
+switch under the tabs, also `?period=day|week|month` in the URL). Tiles compare the period in
+progress with the previous one at the same point, the chart follows whichever tile is picked,
+endings are shown as shares, and every counter sits in one table with a column per period —
+click a column to rank by it. **Health** keeps the probes and the service buttons, **Usage** the
+AI spend by provider at the same grain, **Logs** the host's lines.
+
 Terminal 3 — the phone app, optional:
 
 ```bash

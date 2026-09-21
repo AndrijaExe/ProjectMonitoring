@@ -1,4 +1,10 @@
-import type { ProjectCard, ProjectUsage, UsageDay } from '@shared/model/monitoring'
+import type {
+  ProjectCard,
+  ProjectReport,
+  ProjectUsage,
+  ReportPeriod,
+  UsageProvider,
+} from '@shared/model/monitoring'
 import {
   USAGE_FAIR_USE as FAIR_USE,
   USAGE_RELATED as RELATED,
@@ -6,14 +12,30 @@ import {
   formatDay,
   formatUsd,
   hasDayActivity,
-  uniqueProviders,
   usageColorFor as colorFor,
-  valueFor,
 } from '@shared/ui/usage'
+import { axisLabel, bucketLabel, bucketSpan, currentLabel } from '@shared/ui/report'
+import { BarChart, type BarPoint } from './BarChart'
 
 type Props = {
   card: ProjectCard
   usage?: ProjectUsage
+  /** When present, the chart and the table follow the page's period instead of the 14-day default. */
+  report?: ProjectReport
+  period: ReportPeriod
+}
+
+/** One row of the by-period table, whichever source it came from. */
+type UsageRow = {
+  key: string
+  label: string
+  axis: string
+  title: string
+  open: boolean
+  tokens_in: number
+  tokens_out: number
+  cost_micros: number
+  providers: UsageProvider[]
 }
 
 /**
@@ -23,14 +45,38 @@ type Props = {
  * key here. The game already sees usage on every completion and publishes it; this panel
  * only reads that, split by the host that was called.
  */
-export function UsagePanel({ card, usage }: Props) {
+export function UsagePanel({ card, usage, report, period }: Props) {
+  // With a report the headline follows the page's period; without one it is the 24-hour card.
+  const current = report?.buckets[report.buckets.length - 1]
   const last24h = usage?.last_24h
   const totals = card.metrics.totals_24h
-  const tokensIn = last24h?.tokens_in ?? totals['ai.tokens.in']
-  const tokensOut = last24h?.tokens_out ?? totals['ai.tokens.out']
-  const micros = last24h?.cost_micros ?? totals['ai.cost.micros']
-  const providers = last24h?.providers ?? []
+  const tokensIn = current?.usage.tokens_in ?? last24h?.tokens_in ?? totals['ai.tokens.in']
+  const tokensOut = current?.usage.tokens_out ?? last24h?.tokens_out ?? totals['ai.tokens.out']
+  const micros = current?.usage.cost_micros ?? last24h?.cost_micros ?? totals['ai.cost.micros']
+  const providers = current?.usage.providers ?? last24h?.providers ?? []
+  const headlineSpan = current ? currentLabel(period).toLowerCase() : 'last 24h'
   const days = usage?.days ?? []
+  const rows: UsageRow[] = report
+    ? report.buckets.map((bucket) => ({
+        key: bucket.key,
+        label: bucketLabel(bucket, period),
+        axis: axisLabel(bucket, period),
+        title: bucketSpan(bucket, period),
+        open: !bucket.complete,
+        ...bucket.usage,
+      }))
+    : days.map((day) => ({
+        key: day.date,
+        label: formatDay(day.date),
+        axis: formatDay(day.date),
+        title: formatDay(day.date),
+        open: false,
+        tokens_in: day.tokens_in,
+        tokens_out: day.tokens_out,
+        cost_micros: day.cost_micros,
+        providers: day.providers,
+      }))
+  const grain = report ? period : 'day'
   const related = RELATED.flatMap((row) => {
     const value = totals[row.name]
     return value == null ? [] : [{ ...row, value }]
@@ -49,7 +95,7 @@ export function UsagePanel({ card, usage }: Props) {
 
   return (
     <section className="usage">
-      <h2>AI usage, last 24h</h2>
+      <h2>AI usage, {headlineSpan}</h2>
       {!hasAnything ? (
         <p className="empty">
           Nothing billed yet. Token counts arrive with the next poll after Loop 9 has answered
@@ -108,29 +154,34 @@ export function UsagePanel({ card, usage }: Props) {
         </>
       ) : null}
 
-      <DailyChart days={days} />
+      <UsageChart rows={rows} grain={grain} />
 
-      {days.some(hasDayActivity) ? (
+      {rows.some(hasRowActivity) ? (
         <>
-          <h3>By day</h3>
+          <h3>By {grain}</h3>
           <table className="usage-table">
             <thead>
               <tr>
-                <th>Day</th>
+                <th>{grain === 'day' ? 'Day' : grain === 'week' ? 'Week' : 'Month'}</th>
                 <th>In</th>
                 <th>Out</th>
                 <th>Spend</th>
               </tr>
             </thead>
             <tbody>
-              {days.filter(hasDayActivity).map((day) => (
-                <tr key={day.date}>
-                  <td>{formatDay(day.date)}</td>
-                  <td className="mono">{formatCount(day.tokens_in)}</td>
-                  <td className="mono">{formatCount(day.tokens_out)}</td>
-                  <td className="mono">{formatUsd(day.cost_micros)}</td>
-                </tr>
-              ))}
+              {[...rows]
+                .reverse()
+                .filter(hasRowActivity)
+                .map((row) => (
+                  <tr key={row.key} className={row.open ? 'row-open' : ''}>
+                    <td title={row.title}>
+                      {row.open ? currentLabel(grain) : row.label}
+                    </td>
+                    <td className="mono">{formatCount(row.tokens_in)}</td>
+                    <td className="mono">{formatCount(row.tokens_out)}</td>
+                    <td className="mono">{formatUsd(row.cost_micros)}</td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </>
@@ -183,111 +234,54 @@ export function UsagePanel({ card, usage }: Props) {
   )
 }
 
-function DailyChart({ days }: { days: UsageDay[] }) {
-  if (days.length === 0 || !days.some(hasDayActivity)) {
+function hasRowActivity(row: UsageRow): boolean {
+  return row.tokens_in > 0 || row.tokens_out > 0 || row.cost_micros > 0
+}
+
+function UsageChart({ rows, grain }: { rows: UsageRow[]; grain: ReportPeriod }) {
+  if (rows.length === 0 || !rows.some(hasRowActivity)) {
     return null
   }
 
-  const useCost = days.some((day) => day.cost_micros > 0)
-  const providers = uniqueProviders(days)
-  const stacked = days.map((day) =>
-    providers.map((provider) => valueFor(day, provider, useCost)),
-  )
-  const max = Math.max(
-    ...stacked.map((parts) => parts.reduce((sum, part) => sum + part, 0)),
-    0,
-  )
-
-  if (max <= 0) {
-    return null
+  const useCost = rows.some((row) => row.cost_micros > 0)
+  const seen = new Map<string, UsageProvider>()
+  for (const row of rows) {
+    for (const provider of row.providers) {
+      if (!seen.has(provider.id)) {
+        seen.set(provider.id, provider)
+      }
+    }
   }
+  const providers = [...seen.values()]
 
-  const width = 640
-  const height = 176
-  const left = 52
-  const right = 12
-  const top = 12
-  const bottom = 28
-  const innerWidth = width - left - right
-  const innerHeight = height - top - bottom
-  const gap = 4
-  const barWidth = Math.max(8, innerWidth / days.length - gap)
+  const points: BarPoint[] = rows.map((row) => ({
+    key: row.key,
+    label: row.axis,
+    title: row.title,
+    open: row.open,
+    parts: providers.map((provider) => {
+      const match = row.providers.find((item) => item.id === provider.id)
+      return {
+        id: provider.id,
+        label: provider.label,
+        color: colorFor(provider.id),
+        value: match ? (useCost ? match.cost_micros : match.tokens_in + match.tokens_out) : 0,
+      }
+    }),
+  }))
 
   return (
     <>
-      <h3>{useCost ? 'Estimated spend by day' : 'Tokens by day'}</h3>
+      <h3>{useCost ? 'Estimated spend' : 'Tokens'} by {grain}</h3>
       <p className="meta">
-        Last {days.length} UTC days. Growth between stored readings — the first reading of a
-        series is a baseline, not a bill.
+        Last {rows.length} UTC {grain}s, stacked by provider. Growth between stored readings —
+        the first reading of a series is a baseline, not a bill.
       </p>
-      <svg className="usage-chart" viewBox={`0 0 ${width} ${height}`} role="img">
-        <title>{useCost ? 'Estimated spend by day' : 'Tokens by day'}</title>
-        {[0, 0.5, 1].map((tick) => {
-          const y = top + innerHeight * (1 - tick)
-          const value = max * tick
-          return (
-            <g key={tick}>
-              <line
-                x1={left}
-                x2={width - right}
-                y1={y}
-                y2={y}
-                stroke="rgba(198, 245, 74, 0.12)"
-              />
-              <text x={left - 8} y={y + 4} textAnchor="end" className="usage-axis">
-                {useCost ? formatUsd(value) : formatCount(value)}
-              </text>
-            </g>
-          )
-        })}
-        {days.map((day, index) => {
-          const x = left + (innerWidth / days.length) * index + gap / 2
-          let y = top + innerHeight
-          const parts = stacked[index]
-          const labelEvery = days.length > 10 ? 2 : 1
-
-          return (
-            <g key={day.date}>
-              {parts.map((value, partIndex) => {
-                const barHeight = (value / max) * innerHeight
-                y -= barHeight
-                if (barHeight <= 0) {
-                  return null
-                }
-
-                const provider = providers[partIndex]
-                return (
-                  <rect
-                    key={provider.id}
-                    x={x}
-                    y={y}
-                    width={barWidth}
-                    height={barHeight}
-                    fill={colorFor(provider.id)}
-                  >
-                    <title>
-                      {`${formatDay(day.date)} · ${provider.label} · ${
-                        useCost ? formatUsd(value) : formatCount(value)
-                      }`}
-                    </title>
-                  </rect>
-                )
-              })}
-              {index % labelEvery === 0 ? (
-                <text
-                  x={x + barWidth / 2}
-                  y={height - 8}
-                  textAnchor="middle"
-                  className="usage-axis"
-                >
-                  {formatDay(day.date)}
-                </text>
-              ) : null}
-            </g>
-          )
-        })}
-      </svg>
+      <BarChart
+        title={`${useCost ? 'Estimated spend' : 'Tokens'} by ${grain}`}
+        points={points}
+        format={useCost ? formatUsd : formatCount}
+      />
     </>
   )
 }
-

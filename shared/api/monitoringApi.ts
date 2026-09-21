@@ -9,6 +9,8 @@ import type {
   LogQueryArgs,
   OverviewResponse,
   ProjectDetail,
+  ProjectReport,
+  ReportPeriod,
   ProjectLogs,
   ServiceAction,
   SessionResponse,
@@ -92,6 +94,11 @@ export const monitoringApi = createApi({
     getProject: builder.query<ProjectDetail, string>({
       query: (gameId) => `/api/v1/projects/${gameId}`,
       providesTags: (_result, _error, gameId) => [{ type: 'Project', id: gameId }],
+    }),
+    getProjectReport: builder.query<ProjectReport, { gameId: string; period: ReportPeriod }>({
+      query: ({ gameId, period }) =>
+        `/api/v1/projects/${encodeURIComponent(gameId)}/report?period=${period}`,
+      providesTags: (_result, _error, { gameId }) => [{ type: 'Project', id: gameId }],
     }),
     getProjectLogs: builder.query<ProjectLogs, LogQueryArgs>({
       query: ({ gameId, level, text }) => {
@@ -196,6 +203,7 @@ export const {
   useLazyGetSessionQuery,
   useGetOverviewQuery,
   useGetProjectQuery,
+  useGetProjectReportQuery,
   useGetProjectLogsQuery,
   useGetSystemLogsQuery,
   useGetServiceStatusQuery,

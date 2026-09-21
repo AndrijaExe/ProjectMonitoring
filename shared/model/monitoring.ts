@@ -81,6 +81,37 @@ export type ProjectUsage = {
   days: UsageDay[]
 }
 
+export type ReportPeriod = 'day' | 'week' | 'month'
+
+export function parseReportPeriod(value: string | null | undefined): ReportPeriod {
+  return value === 'day' || value === 'month' ? value : 'week'
+}
+
+export type ReportBucket = {
+  /** `2026-09-21`, `2026-W38` or `2026-09`, depending on the period. */
+  key: string
+  start: string
+  end: string
+  /** False for the newest bucket, which is still filling. */
+  complete: boolean
+  /** Growth of every counter inside the bucket; pushed events are summed. */
+  totals: Record<string, number>
+  usage: {
+    tokens_in: number
+    tokens_out: number
+    cost_micros: number
+    providers: UsageProvider[]
+  }
+}
+
+export type ProjectReport = {
+  game_id: string
+  period: ReportPeriod
+  timezone: 'UTC'
+  /** Oldest first; the last bucket is the one in progress. */
+  buckets: ReportBucket[]
+}
+
 export type ProjectDetail = {
   project: ProjectCard
   health_history: HealthHistoryRow[]
