@@ -13,6 +13,7 @@ import {
   elapsedShare,
   formatChange,
   groupFor,
+  isMoney,
   isProviderCopy,
   labelFor,
   previousLabel,
@@ -248,9 +249,7 @@ export function OverviewPanel({ card, report, period, loading, lastGaugeAt }: Pr
                             key={columns[index].key}
                             className={`mono num${value === 0 ? ' zero' : ''}${columns[index].complete ? '' : ' col-open'}`}
                           >
-                            {row.name === 'ai.cost.micros' || row.name.startsWith('ai.cost.micros.')
-                              ? formatUsd(value)
-                              : formatCount(value)}
+                            {isMoney(row.name) ? formatUsd(value) : formatCount(value)}
                           </td>
                         ))}
                       </tr>

@@ -123,6 +123,7 @@ export function isUsageMetric(name: string): boolean {
   return (
     name.startsWith('ai.tokens.') ||
     name.startsWith('ai.cost.micros') ||
+    name.startsWith('voice.') ||
     name.startsWith('chat.denied.') ||
     name.startsWith('abuse.')
   )

@@ -168,6 +168,54 @@ final class AnnounceMetricAlarmsTest extends TestCase
         self::assertStringContainsString('GAME_GLOBAL_DAILY_QUOTA', $channel->sent[0]->body());
     }
 
+    public function testSpendIsJudgedOverTheDayNotTheHour(): void
+    {
+        $metrics = new InMemoryMetricStore();
+        // $6 of voice across the day, never more than $1.50 in any hour.
+        $this->record($metrics, 'voice.cost.micros', 0.0, '-23 hours');
+        $this->record($metrics, 'voice.cost.micros', 1_500_000.0, '-18 hours');
+        $this->record($metrics, 'voice.cost.micros', 3_000_000.0, '-12 hours');
+        $this->record($metrics, 'voice.cost.micros', 4_500_000.0, '-6 hours');
+        $this->record($metrics, 'voice.cost.micros', 6_000_000.0, '-1 minute');
+        $this->record($metrics, 'ai.cost.micros', 0.0, '-23 hours');
+        $this->record($metrics, 'ai.cost.micros', 400_000.0, '-1 minute');
+
+        $channel = new FakeAlertChannel();
+        $state = new InMemoryAlarmStateStore();
+        $announce = new AnnounceMetricAlarms(
+            $metrics,
+            $state,
+            $channel,
+            new NullLogger(),
+            'voice.cost.micros=2000000',
+            'voice.cost.micros=5000000,ai.cost.micros=3000000',
+        );
+        $announce->forReading($this->project(), $this->reading(), [], $this->now());
+
+        // The hourly ceiling never tripped; the day did. AI spend stayed under its own.
+        self::assertCount(1, $channel->sent);
+        self::assertStringContainsString('voice.cost.micros is over its daily ceiling', $channel->sent[0]->subject());
+        self::assertStringContainsString('grew by 6000000 in the last 24 hours', $channel->sent[0]->body());
+        self::assertStringContainsString('5000000 is $5', $channel->sent[0]->body());
+        self::assertStringContainsString('VOICE_ENABLED=false', $channel->sent[0]->body());
+        self::assertSame(['day:voice.cost.micros'], array_keys($state->raised(GameId::fromString('loop9'))));
+    }
+
+    public function testTheVoiceKillSwitchNamesItsKnob(): void
+    {
+        $metrics = new InMemoryMetricStore();
+        $this->record($metrics, 'voice.denied.voice_global', 0.0, '-90 minutes');
+        $this->record($metrics, 'voice.denied.voice_global', 3.0, '-1 minute');
+
+        $channel = new FakeAlertChannel();
+        $this->announcer($metrics, new InMemoryAlarmStateStore(), $channel, 'voice.denied.voice_global=0')
+            ->forReading($this->project(), $this->reading(), [], $this->now());
+
+        self::assertCount(1, $channel->sent);
+        self::assertStringContainsString('VOICE_GLOBAL_DAILY_QUOTA', $channel->sent[0]->body());
+        self::assertStringContainsString('answered in text', $channel->sent[0]->body());
+    }
+
     private function announcer(
         InMemoryMetricStore $metrics,
         InMemoryAlarmStateStore $state,

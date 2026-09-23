@@ -74,7 +74,11 @@ services:
       # Ceilings for a game's own counters, as "name=limit" pairs per hour. Only the counters
       # named here are watched; the other metric alarms fire on a change and need no number.
       - key: ALERT_RATE_PER_HOUR
-        value: api.errors=20,ai.failed=10,safety.unavailable=10,chat.denied.player_daily=0,chat.denied.player_monthly=0,chat.denied.global=0,abuse.watch=0
+        value: api.errors=20,ai.failed=10,safety.unavailable=10,chat.denied.player_daily=0,chat.denied.player_monthly=0,chat.denied.global=0,abuse.watch=0,voice.denied.voice_global=0,voice.unavailable=10
+      # Spend, judged over the last 24 hours. Micros are millionths of a dollar: $3 of text AI
+      # and $5 of voice a day. A normal day is cents; the voice kill-switch sits at ~$15.
+      - key: ALERT_PER_DAY
+        value: ai.cost.micros=3000000,voice.cost.micros=5000000
       # Optional. Where Loop 9 publishes its own counters, and the secret for reading them
       # as "loop9=<token>". The token must match METRICS_TOKEN on the game's service.
       # Unset means the console shows probes only, which is what it did before.

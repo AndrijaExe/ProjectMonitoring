@@ -28,6 +28,7 @@ final class AnnounceMetricAlarms
 {
     private const PLAYERS_ONLINE = 'players.online';
     private const RATE_WINDOW_HOURS = 1;
+    private const DAY_WINDOW_HOURS = 24;
     private const QUIET_WINDOW_HOURS = 24;
 
     /**
@@ -45,11 +46,35 @@ final class AnnounceMetricAlarms
         'abuse.watch' => [
             'A single player is chatting far beyond a normal run. Find the player hash in the game\'s log before touching any quota.',
         ],
+        'ai.cost.micros' => [
+            'The figure is in millionths of a dollar: 3000000 is $3.',
+            'A normal day costs cents. Look at chat.messages for the same hours before suspecting the price; a quota that is too loose shows up here first.',
+        ],
+        'voice.cost.micros' => [
+            'The figure is in millionths of a dollar: 5000000 is $5.',
+            'Voice is capped per player (VOICE_DAILY_PLAYER_QUOTA, VOICE_MONTHLY_PLAYER_QUOTA) and in total (VOICE_GLOBAL_DAILY_QUOTA) on the game\'s Render service.',
+            'To stop it outright, set AI_TTS_PROVIDER=openai if it was switched, or VOICE_ENABLED=false; the game goes on in text either way.',
+        ],
+        'voice.denied.voice_global' => [
+            'The voice kill-switch tripped: every Voice Line owner is being answered in text until the day turns over.',
+            'If the traffic is real players, raise VOICE_GLOBAL_DAILY_QUOTA on the game\'s Render service; it applies without a cook.',
+        ],
+        'voice.unavailable' => [
+            'Replies are arriving without a voice (speech provider failing or timing out). Players still get the text.',
+        ],
     ];
 
     /** @var array<string, float> */
     private readonly array $rateLimits;
 
+    /** @var array<string, float> */
+    private readonly array $dayLimits;
+
+    /**
+     * @param string $dayLimits the same "name=limit" list, over the last 24 hours rather than
+     *                          the last hour — what money is measured in. An hour of voice can be
+     *                          fine and the day it adds up to not.
+     */
     public function __construct(
         private readonly MetricStore $metrics,
         private readonly AlarmStateStore $alarms,
@@ -57,8 +82,11 @@ final class AnnounceMetricAlarms
         private readonly LoggerInterface $logger,
         #[Autowire('%env(ALERT_RATE_PER_HOUR)%')]
         string $rateLimits = '',
+        #[Autowire('%env(default::ALERT_PER_DAY)%')]
+        ?string $dayLimits = '',
     ) {
         $this->rateLimits = self::parseLimits($rateLimits);
+        $this->dayLimits = self::parseLimits((string) $dayLimits);
     }
 
     /**
@@ -122,6 +150,24 @@ final class AnnounceMetricAlarms
             }
         }
 
+        $lastDay = $this->dayLimits === [] ? [] : $this->metrics->totalsBetween(
+            $project->gameId,
+            $now->modify(sprintf('-%d hours', self::DAY_WINDOW_HOURS)),
+            null,
+        );
+
+        foreach ($this->dayLimits as $name => $limit) {
+            $grown = $lastDay[$name] ?? 0.0;
+
+            if ($grown > $limit) {
+                $alerts[] = new MetricAlert($project, 'day:'.$name, sprintf('%s is over its daily ceiling', $name), [
+                    sprintf('%s grew by %s in the last 24 hours.', $name, self::number($grown)),
+                    sprintf('The configured ceiling is %s per day.', self::number($limit)),
+                    ...(self::ADVICE[$name] ?? []),
+                ]);
+            }
+        }
+
         if ($this->hasGoneQuiet($project, $now)) {
             $alerts[] = new MetricAlert($project, 'quiet', 'nothing has been counted for a day', [
                 'The game was counting events the day before and has counted none since.',
@@ -169,6 +215,7 @@ final class AnnounceMetricAlarms
     {
         $summary = match (true) {
             str_starts_with($key, 'rate:') => sprintf('%s is back within its limit', substr($key, 5)),
+            str_starts_with($key, 'day:') => sprintf('%s is back under its daily ceiling', substr($key, 4)),
             $key === 'quiet' => 'events are being counted again',
             $key === 'players.gone' => 'players are online again',
             $key === 'storage.memory' => 'counters are being stored properly again',

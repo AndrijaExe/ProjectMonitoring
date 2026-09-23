@@ -18,12 +18,13 @@ export const HEADLINE_COUNTERS: {
   { key: 'sessions', label: 'Sessions', goodWhen: 'up', names: ['auth.issued'] },
   { key: 'runs', label: 'Runs finished', goodWhen: 'up', names: ['run.ended'] },
   { key: 'chats', label: 'Chat replies', goodWhen: 'up', names: ['chat.messages'] },
-  { key: 'spend', label: 'AI spend', goodWhen: 'down', names: ['ai.cost.micros'], money: true },
+  // Text and voice together: what the game costs to run is one number.
+  { key: 'spend', label: 'AI spend', goodWhen: 'down', names: ['ai.cost.micros', 'voice.cost.micros'], money: true },
   {
     key: 'problems',
     label: 'Problems',
     goodWhen: 'down',
-    names: ['api.errors', 'ai.failed', 'safety.unavailable'],
+    names: ['api.errors', 'ai.failed', 'safety.unavailable', 'voice.unavailable'],
   },
 ]
 
@@ -56,6 +57,13 @@ const LABELS: Record<string, string> = {
   'safety.blocked': 'Blocked by moderation',
   'safety.unavailable': 'Moderation unavailable',
   'abuse.watch': 'Crossed the daily watch line',
+  'auth.voice_entitled': 'Sessions with the Voice Line',
+  'voice.messages': 'Voice replies',
+  'voice.denied': 'Voice refused',
+  'voice.stt.seconds': 'Seconds heard (speech to text)',
+  'voice.tts.chars': 'Characters spoken',
+  'voice.cost.micros': 'Voice spend',
+  'voice.unavailable': 'Replies that lost their voice',
   'players.online': 'players online',
   'players.day': 'players today',
 }
@@ -66,6 +74,7 @@ export const COUNTER_GROUPS: { id: string; label: string; prefixes: string[] }[]
   { id: 'endings', label: 'Endings', prefixes: ['run.ended.'] },
   { id: 'dragojlo', label: 'Dragojlo', prefixes: ['run.commitment.', 'advice.', 'run.relationship.'] },
   { id: 'ai', label: 'AI', prefixes: ['ai.'] },
+  { id: 'voice', label: 'Voice Line', prefixes: ['voice.', 'auth.voice_entitled'] },
   { id: 'safety', label: 'Safety and limits', prefixes: ['safety.', 'chat.denied', 'abuse.'] },
   { id: 'errors', label: 'Errors', prefixes: ['api.'] },
   { id: 'other', label: 'Other', prefixes: [] },
@@ -93,6 +102,9 @@ export function labelFor(name: string): string {
   if (name.startsWith('chat.denied.')) {
     return `Chats refused: ${words(name.slice('chat.denied.'.length))}`
   }
+  if (name.startsWith('voice.denied.')) {
+    return `Voice refused: ${words(name.slice('voice.denied.'.length))}`
+  }
 
   // `advice.gate.wrong_lift.dependency` → "advice gate wrong lift dependency"; readable, and
   // still searchable by the raw name in the title attribute.
@@ -103,6 +115,10 @@ export function groupFor(name: string): string {
   // The endings group must win over the players group for `run.ended.<x>`.
   if (name.startsWith('run.ended.')) {
     return 'endings'
+  }
+  // And the voice group over the players group for `auth.voice_entitled`.
+  if (name === 'auth.voice_entitled') {
+    return 'voice'
   }
   for (const group of COUNTER_GROUPS) {
     if (group.prefixes.some((prefix) => name.startsWith(prefix))) {
@@ -125,6 +141,11 @@ export function sumOf(bucket: ReportBucket | undefined, names: string[]): number
  * The per-provider copies of the AI series (`ai.tokens.in.openai`) repeat the totals above
  * them; the Usage tab already splits by provider, so the counter table leaves them out.
  */
+/** Counters that hold millionths of a dollar and print as money. */
+export function isMoney(name: string): boolean {
+  return name === 'ai.cost.micros' || name.startsWith('ai.cost.micros.') || name === 'voice.cost.micros'
+}
+
 export function isProviderCopy(name: string): boolean {
   return /^ai\.(tokens\.(in|out)|cost\.micros)\.[^.]+$/.test(name)
 }
