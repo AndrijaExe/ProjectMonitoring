@@ -42,6 +42,7 @@ const LABELS: Record<string, string> = {
   'run.ended.merged_memory': 'Merged Memory',
   'run.ended.the_replacement': 'The Replacement',
   'run.ended.the_exit': 'The Exit',
+  'run.ended.readmitted': 'Readmitted (The Clinic)',
   'run.commitment.location_misdirection': 'Planted a false location',
   'run.commitment.decoy_visited': 'Player checked the false location',
   'run.commitment.contradiction_exposed': 'Player caught the lie',
