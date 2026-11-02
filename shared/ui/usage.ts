@@ -12,6 +12,7 @@ export const USAGE_RELATED: { name: string; label: string }[] = [
   { name: 'chat.messages', label: 'chat replies' },
   { name: 'ai.fallback', label: 'fell back to another provider' },
   { name: 'ai.failed', label: 'provider failures' },
+  { name: 'chat.fallback.ai_unavailable', label: 'replies that fell back to a bad line' },
   { name: 'safety.blocked', label: 'blocked by moderation' },
   { name: 'safety.unavailable', label: 'moderation unavailable' },
 ]

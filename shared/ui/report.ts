@@ -24,7 +24,7 @@ export const HEADLINE_COUNTERS: {
     key: 'problems',
     label: 'Problems',
     goodWhen: 'down',
-    names: ['api.errors', 'ai.failed', 'safety.unavailable', 'voice.unavailable'],
+    names: ['api.errors', 'ai.failed', 'chat.fallback.ai_unavailable', 'safety.unavailable', 'voice.unavailable'],
   },
 ]
 
@@ -51,6 +51,7 @@ const LABELS: Record<string, string> = {
   'run.commitment.stale_floor': 'Described the previous floor',
   'ai.fallback': 'Fell back to another provider',
   'ai.failed': 'Provider failures',
+  'chat.fallback.ai_unavailable': 'Replies that fell back to a bad line',
   'ai.tokens.in': 'Tokens in',
   'ai.tokens.out': 'Tokens out',
   'ai.cost.micros': 'AI spend',
