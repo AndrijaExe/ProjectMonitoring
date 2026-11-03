@@ -122,6 +122,24 @@ final class MonitoringOverviewTest extends TestCase
         self::assertSame('counters kept in memory', $card->alarms[1]['label']);
     }
 
+    public function testAFailedScrapeStreakIsNotShownAsAnAlarm(): void
+    {
+        $alarms = new InMemoryAlarmStateStore();
+        $loop9 = GameId::fromString('loop9');
+        // What AnnounceMetricAlarms::forUnreadable leaves after one dropped scrape.
+        $alarms->open($loop9, AnnounceMetricAlarms::STREAK_PREFIX.AnnounceMetricAlarms::UNREADABLE.':1', new \DateTimeImmutable('-10 minutes'));
+        $alarms->open($loop9, 'storage.memory', new \DateTimeImmutable('-30 minutes'));
+
+        $card = (new GetMonitoringOverview(
+            $this->projects(),
+            new InMemoryHealthSnapshotStore(),
+            new InMemoryMetricStore(),
+            $alarms,
+        ))->execute()->projects[0];
+
+        self::assertSame(['storage.memory'], array_column($card->alarms, 'key'));
+    }
+
     public function testAnEmptyFleetIsNeverStale(): void
     {
         $overview = new GetMonitoringOverview(

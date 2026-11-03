@@ -59,6 +59,7 @@ const LABELS: Record<string, string> = {
   'safety.blocked': 'Blocked by moderation',
   'safety.unavailable': 'Moderation unavailable',
   'abuse.watch': 'Crossed the daily watch line',
+  'auth.unavailable': 'Sign-ins Steam could not check',
   'auth.voice_entitled': 'Sessions with the Voice Line',
   'voice.messages': 'Voice replies',
   'voice.denied': 'Voice refused',

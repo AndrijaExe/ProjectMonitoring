@@ -104,6 +104,130 @@ final class AnnounceMetricAlarmsTest extends TestCase
         self::assertSame([], $quiet->sent);
     }
 
+    public function testNobodyOnlineStaysRaisedUntilSomebodyIsBack(): void
+    {
+        $channel = new FakeAlertChannel();
+        $state = new InMemoryAlarmStateStore();
+        $announce = $this->announcer(new InMemoryMetricStore(), $state, $channel);
+        $nobody = new GameReading([], ['players.online' => 0.0], 'redis');
+
+        $announce->forReading($this->project(), $nobody, ['players.online' => 3.0], $this->now());
+        // The poll after the fall reads zero on both sides. That is the same empty game, not a
+        // recovery, and it used to be mailed as "players are online again".
+        $announce->forReading($this->project(), $nobody, ['players.online' => 0.0], $this->now());
+        $announce->forReading($this->project(), $nobody, ['players.online' => 0.0], $this->now());
+
+        self::assertCount(1, $channel->sent);
+        self::assertStringContainsString('nobody is online', $channel->sent[0]->subject());
+        self::assertSame(['players.gone'], array_keys($state->raised(GameId::fromString('loop9'))));
+
+        // A reading without the gauge says nothing about players, so it does not clear it either.
+        $announce->forReading($this->project(), $this->reading(), ['players.online' => 0.0], $this->now());
+        self::assertCount(1, $channel->sent);
+
+        $announce->forReading(
+            $this->project(),
+            new GameReading([], ['players.online' => 2.0], 'redis'),
+            ['players.online' => 0.0],
+            $this->now(),
+        );
+
+        self::assertCount(2, $channel->sent);
+        self::assertStringContainsString('recovered', $channel->sent[1]->subject());
+        self::assertStringContainsString('players are online again', $channel->sent[1]->subject());
+        self::assertSame([], array_keys($state->raised(GameId::fromString('loop9'))));
+    }
+
+    public function testThreeUnreadableScrapesInARowRaiseOneAlarmAndAReadingClearsIt(): void
+    {
+        $channel = new FakeAlertChannel();
+        $state = new InMemoryAlarmStateStore();
+        $announce = $this->announcer(new InMemoryMetricStore(), $state, $channel);
+        $project = $this->project();
+
+        $announce->forUnreadable($project, 'The game answered 401.', $this->now()->modify('-60 minutes'));
+        $announce->forUnreadable($project, 'The game answered 401.', $this->now()->modify('-30 minutes'));
+
+        // Two misses are a cold start and a bad minute. Nothing to say yet.
+        self::assertSame([], $channel->sent);
+
+        $announce->forUnreadable($project, 'The game answered 401.', $this->now());
+
+        self::assertCount(1, $channel->sent);
+        $mail = $channel->sent[0];
+        self::assertStringContainsString("the game's counters cannot be read", $mail->subject());
+        self::assertStringContainsString('The last 3 readings of its counters failed', $mail->body());
+        // The time of the first miss, so the reader knows how long the monitor has been blind.
+        self::assertStringContainsString('Thu 13 Aug, 11:00 UTC', $mail->body());
+        self::assertStringContainsString('The game answered 401.', $mail->body());
+        self::assertStringContainsString('METRICS_TOKENS', $mail->body());
+        // The count is bookkeeping and goes once the alarm itself is raised.
+        self::assertSame(['metrics.unreadable'], array_keys($state->raised(GameId::fromString('loop9'))));
+
+        $announce->forUnreadable($project, 'The game answered 401.', $this->now()->modify('+30 minutes'));
+        self::assertCount(1, $channel->sent);
+
+        $announce->forReading($project, $this->reading(), [], $this->now()->modify('+60 minutes'));
+
+        self::assertCount(2, $channel->sent);
+        self::assertStringContainsString('recovered', $channel->sent[1]->subject());
+        self::assertStringContainsString("the game's counters are being read again", $channel->sent[1]->subject());
+        self::assertSame([], array_keys($state->raised(GameId::fromString('loop9'))));
+    }
+
+    public function testAGoodReadingBetweenMissesStartsTheCountAgainWithoutAMail(): void
+    {
+        $channel = new FakeAlertChannel();
+        $state = new InMemoryAlarmStateStore();
+        $announce = $this->announcer(new InMemoryMetricStore(), $state, $channel);
+        $project = $this->project();
+
+        $announce->forUnreadable($project, 'timeout', $this->now()->modify('-90 minutes'));
+        $announce->forUnreadable($project, 'timeout', $this->now()->modify('-60 minutes'));
+        $announce->forReading($project, $this->reading(), [], $this->now()->modify('-30 minutes'));
+
+        // Closing the count is not a recovery: nothing was ever announced.
+        self::assertSame([], $channel->sent);
+        self::assertSame([], array_keys($state->raised(GameId::fromString('loop9'))));
+
+        $announce->forUnreadable($project, 'timeout', $this->now());
+        self::assertSame([], $channel->sent);
+    }
+
+    public function testAnUnreadableAlarmThatCouldNotBeMailedIsTriedAgainWithTheTrueCount(): void
+    {
+        $state = new InMemoryAlarmStateStore();
+        $metrics = new InMemoryMetricStore();
+        $failing = new FakeAlertChannel();
+        $failing->willFail('Resend answered 429');
+        $down = $this->announcer($metrics, $state, $failing);
+        $project = $this->project();
+
+        $down->forUnreadable($project, 'timeout', $this->now()->modify('-60 minutes'));
+        $down->forUnreadable($project, 'timeout', $this->now()->modify('-30 minutes'));
+        $down->forUnreadable($project, 'timeout', $this->now());
+
+        self::assertNotContains('metrics.unreadable', array_keys($state->raised(GameId::fromString('loop9'))));
+
+        $channel = new FakeAlertChannel();
+        $this->announcer($metrics, $state, $channel)
+            ->forUnreadable($project, 'timeout', $this->now()->modify('+30 minutes'));
+
+        self::assertCount(1, $channel->sent);
+        self::assertStringContainsString('The last 4 readings of its counters failed', $channel->sent[0]->body());
+        self::assertSame(['metrics.unreadable'], array_keys($state->raised(GameId::fromString('loop9'))));
+    }
+
+    public function testWithNoChannelConfiguredUnreadableScrapesAreNotCounted(): void
+    {
+        $state = new InMemoryAlarmStateStore();
+        $announce = $this->announcer(new InMemoryMetricStore(), $state, new FakeAlertChannel(configured: false));
+
+        $announce->forUnreadable($this->project(), 'timeout', $this->now());
+
+        self::assertSame([], $state->raised(GameId::fromString('loop9')));
+    }
+
     public function testCountersKeptInMemoryAreWorthAMailEvenWithNothingCounted(): void
     {
         $channel = new FakeAlertChannel();
@@ -214,6 +338,21 @@ final class AnnounceMetricAlarmsTest extends TestCase
         self::assertCount(1, $channel->sent);
         self::assertStringContainsString('VOICE_GLOBAL_DAILY_QUOTA', $channel->sent[0]->body());
         self::assertStringContainsString('answered in text', $channel->sent[0]->body());
+    }
+
+    public function testASteamOutageAtSignInSaysWhoIsAffected(): void
+    {
+        $metrics = new InMemoryMetricStore();
+        $this->record($metrics, 'auth.unavailable', 0.0, '-90 minutes');
+        $this->record($metrics, 'auth.unavailable', 2.0, '-1 minute');
+
+        $channel = new FakeAlertChannel();
+        $this->announcer($metrics, new InMemoryAlarmStateStore(), $channel, 'auth.unavailable=0')
+            ->forReading($this->project(), $this->reading(), [], $this->now());
+
+        self::assertCount(1, $channel->sent);
+        self::assertStringContainsString('auth.unavailable is rising fast', $channel->sent[0]->subject());
+        self::assertStringContainsString('STEAM_WEB_API_KEY', $channel->sent[0]->body());
     }
 
     private function announcer(

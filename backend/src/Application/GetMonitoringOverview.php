@@ -112,6 +112,12 @@ final class GetMonitoringOverview
 
         $alarms = [];
         foreach ($raised as $key => $openedAt) {
+            // Failed-scrape counters share the alarm table but are not alarms: one dropped
+            // scrape would otherwise show as a red chip until the next good poll.
+            if (str_starts_with((string) $key, AnnounceMetricAlarms::STREAK_PREFIX)) {
+                continue;
+            }
+
             $alarms[] = [
                 'key' => $key,
                 // The stored state is a key, which is a database value rather than a sentence.

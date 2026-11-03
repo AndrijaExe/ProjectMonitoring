@@ -218,37 +218,58 @@ have no shell, so this is also the only way.
 
 A service can answer every probe correctly while failing at its job: every AI call falling back
 to a canned reply, a whole day passing with nobody playing, counters silently reverting to
-memory. Once game counters are wired (section 7), four more alarms use them. Three need no
-configuration because they fire on a change rather than a state:
+memory. Once game counters are wired (section 7), these alarms use them. All but the last need no
+configuration, and each opens on a change rather than a state, then stays open for as long as
+the condition holds:
 
 | Alarm | Fires when | Why it cannot spam you |
 |---|---|---|
 | `quiet` | Nothing counted for 24h, after a day that did count | A game that never counted anything is unreleased, not quiet |
-| `players.gone` | `players.online` falls from above zero to zero | Zero to zero is a Tuesday, not an event |
+| `players.gone` | `players.online` falls from above zero to zero. It stays raised while nobody is online and clears on the first reading with somebody in | Zero to zero is a Tuesday, not an event: it neither opens the alarm nor closes it |
 | `storage.memory` | The game reports it is counting in memory | It is a one-off condition, mailed once until fixed |
+| `metrics.unreadable` | Three polls in a row found the game up but could not read its counters (about 90 minutes at the half-hourly poll). Clears on the next good reading | One cold start or dropped connection is not news; a wrong token fails the same way every time |
 | `rate:<counter>` | A counter grows past its hourly ceiling | Only the counters you name below are watched |
 
-The fourth needs a number, because only you know what "too many" means for your game. On
-`monitoring-api` > Environment set `ALERT_RATE_PER_HOUR` to comma separated `name=limit` pairs:
+`metrics.unreadable` matters more than it looks: while it is raised no other alarm here can fire,
+because spend, quotas and the voice kill-switch are all judged on readings that are not arriving.
+The usual cause is a token mismatch — the `loop9` entry in `METRICS_TOKENS` on `monitoring-api`
+must equal `METRICS_TOKEN` on the game's service (section 7). Only polls whose health probe passed
+are counted, because a game that is down is never asked for its counters. Before the third miss,
+the count is kept in the same table as a `streak:metrics.unreadable:<n>` row; it is never mailed
+and is closed by the next good reading or replaced by the alarm itself.
+
+The last one needs a number, because only you know what "too many" means for your game. On
+`monitoring-api` > Environment set `ALERT_RATE_PER_HOUR` to comma separated `name=limit` pairs.
+[`render.yaml`](render.yaml) sets this:
 
 ```
-api.errors=20,ai.failed=10,safety.unavailable=10,chat.denied.player_daily=0,chat.denied.player_monthly=0,chat.denied.global=0,abuse.watch=0
+api.errors=20,ai.failed=10,safety.unavailable=10,chat.denied.player_daily=0,chat.denied.player_monthly=0,chat.denied.global=0,abuse.watch=0,voice.denied.voice_global=0,voice.unavailable=10,auth.unavailable=0
 ```
+
+**A service deployed before a pair was added has to be edited by hand.** The value on an existing
+`monitoring-api` is the one in its Environment tab, not the one in this repository. When
+`auth.unavailable=0` was added, open `monitoring-api` > Environment, replace the whole
+`ALERT_RATE_PER_HOUR` value with the line above, and save; the service restarts with it, and
+the next poll judges the new counter.
 
 Loop 9 publishes `chat.messages`, `chat.denied`, `chat.denied.player_daily`,
 `chat.denied.player_monthly`, `chat.denied.global`, `abuse.watch`, `api.errors`, `ai.fallback`,
-`ai.failed`, `safety.blocked`, `safety.unavailable`, `auth.issued`, `auth.rejected` and
-`run.ended`, so any of those can be given a ceiling. A ceiling of `0` mails on the first event
-in the hour — that is how a farmer hitting a quota shows up. A typo is ignored rather than fatal:
-a bad pair is dropped and the poll still records health. Leave the variable empty and no rate
-alarm exists.
+`ai.failed`, `safety.blocked`, `safety.unavailable`, `auth.issued`, `auth.rejected`,
+`auth.unavailable`, `voice.denied.voice_global`, `voice.unavailable` and `run.ended`, among
+others, so any of those can be given a ceiling. A ceiling of `0` mails on the first event in the
+hour — that is how a farmer hitting a quota shows up. A typo is ignored rather than fatal: a bad
+pair is dropped and the poll still records health. Leave the variable empty and no rate alarm
+exists.
 
-Two of those carry advice in the mail, because the number alone does not say what to do.
+Some of those carry advice in the mail, because the number alone does not say what to do.
 `chat.denied.global` means the whole game hit its daily chat quota and every player is being
 told the service is at capacity; if the traffic is real, raise `GAME_GLOBAL_DAILY_QUOTA` on the
 game's Render service, which applies without a new build. `abuse.watch` means one player is
 chatting far beyond a normal run; the player hash is in the game's log, and no quota should move
-for one farmer.
+for one farmer. `auth.unavailable` means Steam could not be asked whether a player owns the
+game, so the game refused that sign-in and the player has no phone until Steam answers; it is
+usually Steam itself, and if it persists while Steam is fine, check `STEAM_WEB_API_KEY` on the
+game's Render service.
 
 Each alarm is mailed once when it opens and once when it clears, the same as a probe alert, and
 the state lives in the `metric_alarms` table. An alarm whose mail could not be delivered is not
@@ -270,7 +291,14 @@ at `GET /metrics`, and the monitor reads them each time a poll finds the game up
    `LOOP9_METRICS_URL` is already set by the blueprint.
 
 Without the token the game's endpoint returns 404 and the console shows probes only, which is
-what it did before. Nothing else breaks.
+what it did before. Nothing else breaks, but with mail configured the third such poll in a row
+raises `metrics.unreadable` (section 6): a URL that is set and cannot be read is a broken wire,
+and every metric alarm is blind until it is fixed.
+
+A reading is stored whole, however many series the game publishes. One batch holds 50 samples,
+which is the limit for pushed metrics; a scrape larger than that is written in several, and the
+monitor's log says so once per poll ("Game reading stored in several batches."). Loop 9 publishes
+well over 50, so that line is normal.
 
 Three things to expect the first day:
 

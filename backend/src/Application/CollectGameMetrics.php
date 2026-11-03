@@ -38,12 +38,16 @@ final class CollectGameMetrics
         try {
             $reading = $this->source->read($project);
         } catch (MetricsUnavailable $exception) {
-            // A game that will not report its counters is not an outage. The probe already
-            // said whether it is up, and that is the part the operator is paged about.
+            // One refused read is not an outage. The probe already said whether the game is up,
+            // and that is the part the operator is paged about.
             $this->logger->info('Could not read game counters.', [
                 'game_id' => $project->gameId->value,
                 'reason' => $exception->getMessage(),
             ]);
+
+            // Several in a row are a different matter: every metric alarm is judged on readings,
+            // so a monitor that cannot read cannot warn either. The alarms keep the count.
+            $this->alarms->forUnreadable($project, $exception->getMessage(), $now);
 
             return 0;
         }
@@ -62,8 +66,8 @@ final class CollectGameMetrics
 
         $samples = [];
 
-        // Gauges first, because the batch below is capped: a level dropped from a reading has no
-        // second chance, while a counter's growth survives in the next one.
+        // Gauges first, because each batch below is written on its own: if a later one fails, a
+        // level has no second chance, while a counter's growth survives in the next reading.
         foreach ($reading->gauges as $name => $value) {
             $samples[] = new MetricSample($project->gameId, $name, $value, ['kind' => 'gauge'], $now);
         }
@@ -81,10 +85,26 @@ final class CollectGameMetrics
                 'game_id' => $project->gameId->value,
             ]);
         } else {
-            // A game publishing more series than a batch holds gets the first of them rather
-            // than a rejected reading. Losing the tail beats losing everything.
-            $samples = array_slice($samples, 0, MetricBatch::MAX_SAMPLES);
-            $this->metrics->recordBatch(new MetricBatch($samples));
+            // The batch cap bounds what one pushed request may write; a scrape is the monitor's
+            // own read and is kept whole. Cutting it at the cap kept only the start of the
+            // alphabet, because the game publishes its counters sorted by name, so safety.* and
+            // voice.* were never stored and nothing judged on them (spend, the voice
+            // kill-switch) could ever fire.
+            $batches = array_chunk($samples, MetricBatch::MAX_SAMPLES);
+            if (count($batches) > 1) {
+                // Said once per poll, so a reading that keeps growing is visible in the log
+                // before it is a surprise in the table size.
+                $this->logger->info('Game reading stored in several batches.', [
+                    'game_id' => $project->gameId->value,
+                    'samples' => count($samples),
+                    'batches' => count($batches),
+                ]);
+            }
+
+            foreach ($batches as $batch) {
+                $this->metrics->recordBatch(new MetricBatch($batch));
+            }
+
             $stored = count($samples);
         }
 

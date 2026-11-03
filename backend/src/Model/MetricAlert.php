@@ -42,6 +42,7 @@ final readonly class MetricAlert implements Notification
             $key === 'rate:abuse.watch' => 'a player is chatting far more than a normal run',
             $key === 'rate:voice.denied.voice_global' => 'the voice kill-switch tripped; everyone is on text',
             $key === 'rate:voice.unavailable' => 'replies are arriving without a voice',
+            $key === 'rate:auth.unavailable' => 'Steam cannot verify sign-ins; players have no phone',
             $key === 'day:ai.cost.micros' => 'AI spend is over its daily ceiling',
             $key === 'day:voice.cost.micros' => 'voice spend is over its daily ceiling',
             str_starts_with($key, 'day:') => sprintf('%s is over its daily ceiling', substr($key, 4)),
@@ -49,6 +50,7 @@ final readonly class MetricAlert implements Notification
             $key === 'quiet' => 'nothing counted for a day',
             $key === 'players.gone' => 'nobody online',
             $key === 'storage.memory' => 'counters kept in memory',
+            $key === 'metrics.unreadable' => "the game's counters cannot be read",
             default => $key,
         };
     }

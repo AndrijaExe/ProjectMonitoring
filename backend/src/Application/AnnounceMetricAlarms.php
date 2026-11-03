@@ -20,16 +20,35 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  * A probe answers whether the service is reachable, which is a different question from whether
  * it is working: every AI call can be failing over to the fallback, a whole day can pass with
  * nobody playing, the counters can quietly fall back to memory, and /healthz will answer 200
- * through all of it. These four alarms are the ones that survived the noise test — each fires
- * on a change rather than on a state, so an unreleased game with no players is silent instead
- * of ringing every hour.
+ * through all of it. These alarms are the ones that survived the noise test — each opens on a
+ * change rather than on a state, so an unreleased game with no players is silent instead of
+ * ringing every hour. Once open, an alarm holds for as long as its condition does and is mailed
+ * once each way: a warning that clears itself on the next poll is two mails and no information.
  */
 final class AnnounceMetricAlarms
 {
     private const PLAYERS_ONLINE = 'players.online';
+    private const PLAYERS_GONE = 'players.gone';
     private const RATE_WINDOW_HOURS = 1;
     private const DAY_WINDOW_HOURS = 24;
     private const QUIET_WINDOW_HOURS = 24;
+
+    /**
+     * Raised when the game's counters could not be read this many scrapes in a row. At the
+     * half-hourly poll that is an hour and a half since the last good reading: one cold start or
+     * one dropped connection says nothing, a wrong token says the same thing every time.
+     */
+    public const UNREADABLE = 'metrics.unreadable';
+    private const UNREADABLE_AFTER = 3;
+
+    /**
+     * Rows in the alarm table that are bookkeeping rather than alarms. The poll is one HTTP
+     * request with no memory of the last, so the count of failed scrapes before there are enough
+     * to say anything has to live somewhere, and the alarm table is the store this class owns.
+     * Nothing mails about these rows, and nothing should show them as raised.
+     */
+    public const STREAK_PREFIX = 'streak:';
+    private const UNREADABLE_STREAK = self::STREAK_PREFIX.self::UNREADABLE.':';
 
     /**
      * What to do about a counter, for the ones where the number alone does not say. A ceiling
@@ -61,6 +80,10 @@ final class AnnounceMetricAlarms
         ],
         'voice.unavailable' => [
             'Replies are arriving without a voice (speech provider failing or timing out). Players still get the text.',
+        ],
+        'auth.unavailable' => [
+            'Steam could not be asked whether a player owns the game, so their sign-in was refused: those players have no phone until Steam answers.',
+            'Usually Steam itself (steamstat.us). If it persists while Steam is fine, check STEAM_WEB_API_KEY on the game\'s Render service.',
         ],
     ];
 
@@ -102,8 +125,8 @@ final class AnnounceMetricAlarms
             return;
         }
 
-        $raised = $this->evaluate($project, $reading, $previousGauges, $now);
-        $open = array_keys($this->alarms->raised($project->gameId));
+        $open = self::keysOf($this->alarms->raised($project->gameId));
+        $raised = $this->evaluate($project, $reading, $previousGauges, $now, $open);
 
         foreach ($raised as $alert) {
             if (!in_array($alert->key, $open, true)) {
@@ -113,6 +136,14 @@ final class AnnounceMetricAlarms
 
         $keys = array_map(static fn (MetricAlert $alert): string => $alert->key, $raised);
         foreach ($open as $key) {
+            if (str_starts_with($key, self::STREAK_PREFIX)) {
+                // A reading arrived, so whatever run of failures came before it is over. It was
+                // never announced, so it is closed without a word.
+                $this->alarms->close($project->gameId, $key);
+
+                continue;
+            }
+
             if (!in_array($key, $keys, true)) {
                 $this->announce($project, $this->recovery($project, $key), $now);
             }
@@ -120,7 +151,71 @@ final class AnnounceMetricAlarms
     }
 
     /**
+     * A scrape that could not be read at all.
+     *
+     * One is a cold start or a dropped connection. Several in a row are a wrong token or a moved
+     * endpoint, and while they last every other alarm here is blind: spend, quotas and the voice
+     * kill-switch are judged on readings that are not arriving. A monitor that cannot see and
+     * says nothing looks exactly like a quiet night, which is the one thing it must not do.
+     *
+     * Other open alarms are left as they are. Nothing was read, so nothing is known to have
+     * recovered.
+     */
+    public function forUnreadable(Project $project, string $reason, \DateTimeImmutable $now): void
+    {
+        if (!$this->channel->isConfigured()) {
+            return;
+        }
+
+        $raised = $this->alarms->raised($project->gameId);
+        $open = self::keysOf($raised);
+        if (in_array(self::UNREADABLE, $open, true)) {
+            // Already said, and still true. Until a reading arrives there is nothing new to add.
+            return;
+        }
+
+        [$failures, $since] = self::streak($raised);
+        $failures++;
+        $since ??= $now;
+
+        if ($failures >= self::UNREADABLE_AFTER) {
+            $this->logger->warning('Game counters unreadable for several polls in a row.', [
+                'game_id' => $project->gameId->value,
+                'failures' => $failures,
+                'reason' => $reason,
+            ]);
+
+            $alert = new MetricAlert($project, self::UNREADABLE, 'the game\'s counters cannot be read', [
+                sprintf(
+                    'The last %d readings of its counters failed, the first of them at %s UTC.',
+                    $failures,
+                    $since->setTimezone(new \DateTimeZone('UTC'))->format('D j M, H:i'),
+                ),
+                sprintf('Latest error: %s', $reason),
+                // Counters are only read after a passing health probe, so this much is known.
+                'Each of those polls found the game up; it is only its numbers that are out of reach.',
+                'Until this clears no other metric alarm can fire: spend, quotas and the voice kill-switch are not being watched.',
+                sprintf(
+                    'The usual cause is a token mismatch: the "%s" entry in METRICS_TOKENS on the monitor must equal METRICS_TOKEN on the game\'s service.',
+                    $project->gameId->value,
+                ),
+            ]);
+
+            if ($this->announce($project, $alert, $now)) {
+                $this->forgetStreak($project, $open);
+
+                return;
+            }
+        }
+
+        // Counted even when the mail just failed, so the retry on the next poll reports how long
+        // it has really been rather than starting over.
+        $this->rememberStreak($project, $open, $failures, $since);
+    }
+
+    /**
      * @param array<string, float> $previousGauges
+     * @param list<string>         $open           alarm keys raised before this reading
      *
      * @return list<MetricAlert>
      */
@@ -129,6 +224,7 @@ final class AnnounceMetricAlarms
         GameReading $reading,
         array $previousGauges,
         \DateTimeImmutable $now,
+        array $open,
     ): array {
         $alerts = [];
 
@@ -179,8 +275,20 @@ final class AnnounceMetricAlarms
 
         $playersNow = $reading->gauges[self::PLAYERS_ONLINE] ?? null;
         $playersBefore = $previousGauges[self::PLAYERS_ONLINE] ?? null;
-        if ($playersNow !== null && $playersNow <= 0.0 && $playersBefore !== null && $playersBefore > 0.0) {
-            $alerts[] = new MetricAlert($project, 'players.gone', 'nobody is online', [
+        if (in_array(self::PLAYERS_GONE, $open, true)) {
+            // Opened on the fall, then held as a state until somebody is back. Judged on the
+            // transition alone, the poll after the fall (zero to zero) closed it and mailed that
+            // players were online again while nobody was. A reading without the gauge says
+            // nothing about players either way, so it does not clear it.
+            if ($playersNow === null || $playersNow <= 0.0) {
+                $alerts[] = new MetricAlert($project, self::PLAYERS_GONE, 'nobody is online', [
+                    'Players online is still zero.',
+                ]);
+            }
+        } elseif ($playersNow !== null && $playersNow <= 0.0 && $playersBefore !== null && $playersBefore > 0.0) {
+            // Opening still takes a fall from above zero: a game nobody has played yet is
+            // unreleased, not abandoned.
+            $alerts[] = new MetricAlert($project, self::PLAYERS_GONE, 'nobody is online', [
                 sprintf('Players online fell from %s to zero.', self::number($playersBefore)),
             ]);
         }
@@ -217,7 +325,8 @@ final class AnnounceMetricAlarms
             str_starts_with($key, 'rate:') => sprintf('%s is back within its limit', substr($key, 5)),
             str_starts_with($key, 'day:') => sprintf('%s is back under its daily ceiling', substr($key, 4)),
             $key === 'quiet' => 'events are being counted again',
-            $key === 'players.gone' => 'players are online again',
+            $key === self::PLAYERS_GONE => 'players are online again',
+            $key === self::UNREADABLE => 'the game\'s counters are being read again',
             $key === 'storage.memory' => 'counters are being stored properly again',
             // An alarm key this version no longer raises. Closing it quietly would leave the
             // operator with an unexplained warning as the last thing they heard.
@@ -227,21 +336,90 @@ final class AnnounceMetricAlarms
         return (new MetricAlert($project, $key, $summary))->cleared();
     }
 
-    private function announce(Project $project, MetricAlert $alert, \DateTimeImmutable $now): void
+    /**
+     * @return bool whether the mail went out, and so whether the state changed
+     */
+    private function announce(Project $project, MetricAlert $alert, \DateTimeImmutable $now): bool
     {
         // State changes only after the mail is away. Recording an alarm that was never
         // delivered would silence it for good, which is the one outcome worse than a duplicate.
         if (!$this->send($alert)) {
-            return;
+            return false;
         }
 
         if ($alert->cleared) {
             $this->alarms->close($project->gameId, $alert->key);
 
-            return;
+            return true;
         }
 
         $this->alarms->open($project->gameId, $alert->key, $now);
+
+        return true;
+    }
+
+    /**
+     * How many scrapes in a row have failed so far, and when the first of them did.
+     *
+     * @param array<array-key, \DateTimeImmutable> $raised
+     *
+     * @return array{int, ?\DateTimeImmutable}
+     */
+    private static function streak(array $raised): array
+    {
+        $failures = 0;
+        $since = null;
+        foreach ($raised as $key => $openedAt) {
+            $key = (string) $key;
+            if (!str_starts_with($key, self::UNREADABLE_STREAK)) {
+                continue;
+            }
+
+            // The highest count wins, so a row left behind by a half-finished update overstates
+            // the streak by one rather than resetting it.
+            $failures = max($failures, (int) substr($key, strlen(self::UNREADABLE_STREAK)));
+            $since = $since === null || $openedAt < $since ? $openedAt : $since;
+        }
+
+        return [$failures, $since];
+    }
+
+    /**
+     * One row holds the count, opened at the time of the first failure, so the mail can say how
+     * long it has been. The new row goes in before the old one comes out: a failure between the
+     * two leaves a count one too high rather than none at all.
+     *
+     * @param list<string> $open
+     */
+    private function rememberStreak(Project $project, array $open, int $failures, \DateTimeImmutable $since): void
+    {
+        $current = self::UNREADABLE_STREAK.$failures;
+        $this->alarms->open($project->gameId, $current, $since);
+        $this->forgetStreak($project, $open, $current);
+    }
+
+    /**
+     * @param list<string> $open
+     */
+    private function forgetStreak(Project $project, array $open, ?string $keep = null): void
+    {
+        foreach ($open as $key) {
+            if (str_starts_with($key, self::UNREADABLE_STREAK) && $key !== $keep) {
+                $this->alarms->close($project->gameId, $key);
+            }
+        }
+    }
+
+    /**
+     * @param array<array-key, \DateTimeImmutable> $raised
+     *
+     * @return list<string>
+     */
+    private static function keysOf(array $raised): array
+    {
+        // A key that looks like a number comes back from an array as an int, and every
+        // comparison made with these is strict.
+        return array_map(static fn (int|string $key): string => (string) $key, array_keys($raised));
     }
 
     private function send(Notification $alert): bool
