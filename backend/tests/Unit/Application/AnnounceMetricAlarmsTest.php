@@ -194,6 +194,25 @@ final class AnnounceMetricAlarmsTest extends TestCase
         self::assertSame([], $channel->sent);
     }
 
+    public function testThreeQuickManualPollsDuringARedeployAreNotAnAlarm(): void
+    {
+        $channel = new FakeAlertChannel();
+        $state = new InMemoryAlarmStateStore();
+        $announce = $this->announcer(new InMemoryMetricStore(), $state, $channel);
+        $project = $this->project();
+
+        // "Update status" tapped three times in two minutes while the game restarts.
+        $announce->forUnreadable($project, 'timeout', $this->now());
+        $announce->forUnreadable($project, 'timeout', $this->now()->modify('+1 minute'));
+        $announce->forUnreadable($project, 'timeout', $this->now()->modify('+2 minutes'));
+        self::assertSame([], $channel->sent);
+
+        // Still unreadable an hour after the first miss: now it is worth a mail.
+        $announce->forUnreadable($project, 'timeout', $this->now()->modify('+60 minutes'));
+        self::assertCount(1, $channel->sent);
+        self::assertStringContainsString('The last 4 readings of its counters failed', $channel->sent[0]->body());
+    }
+
     public function testAnUnreadableAlarmThatCouldNotBeMailedIsTriedAgainWithTheTrueCount(): void
     {
         $state = new InMemoryAlarmStateStore();

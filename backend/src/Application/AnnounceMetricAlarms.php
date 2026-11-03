@@ -42,6 +42,13 @@ final class AnnounceMetricAlarms
     private const UNREADABLE_AFTER = 3;
 
     /**
+     * And this long since the first miss. The console's "Update status" button scrapes too, so
+     * three taps in a minute during a redeploy would otherwise count as three polls. Two
+     * half-hourly intervals, less the schedule's drift.
+     */
+    private const UNREADABLE_MIN_MINUTES = 55;
+
+    /**
      * Rows in the alarm table that are bookkeeping rather than alarms. The poll is one HTTP
      * request with no memory of the last, so the count of failed scrapes before there are enough
      * to say anything has to live somewhere, and the alarm table is the store this class owns.
@@ -178,7 +185,7 @@ final class AnnounceMetricAlarms
         $failures++;
         $since ??= $now;
 
-        if ($failures >= self::UNREADABLE_AFTER) {
+        if ($failures >= self::UNREADABLE_AFTER && $now >= $since->modify(sprintf('+%d minutes', self::UNREADABLE_MIN_MINUTES))) {
             $this->logger->warning('Game counters unreadable for several polls in a row.', [
                 'game_id' => $project->gameId->value,
                 'failures' => $failures,
