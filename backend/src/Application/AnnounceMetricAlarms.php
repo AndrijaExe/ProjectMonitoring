@@ -43,10 +43,12 @@ final class AnnounceMetricAlarms
 
     /**
      * And this long since the first miss. The console's "Update status" button scrapes too, so
-     * three taps in a minute during a redeploy would otherwise count as three polls. Two
-     * half-hourly intervals, less the schedule's drift.
+     * three taps in a minute during a redeploy would otherwise count as three polls. More than
+     * one half-hourly interval plus drift, so a burst of taps and the next poll do not add up to
+     * it; less than two intervals minus drift, so the third scheduled miss still mails when
+     * GitHub starts the first run up to 15 minutes later than the third.
      */
-    private const UNREADABLE_MIN_MINUTES = 55;
+    private const UNREADABLE_MIN_MINUTES = 45;
 
     /**
      * Rows in the alarm table that are bookkeeping rather than alarms. The poll is one HTTP

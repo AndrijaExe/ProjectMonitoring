@@ -227,7 +227,7 @@ the condition holds:
 | `quiet` | Nothing counted for 24h, after a day that did count | A game that never counted anything is unreleased, not quiet |
 | `players.gone` | `players.online` falls from above zero to zero. It stays raised while nobody is online and clears on the first reading with somebody in | Zero to zero is a Tuesday, not an event: it neither opens the alarm nor closes it |
 | `storage.memory` | The game reports it is counting in memory | It is a one-off condition, mailed once until fixed |
-| `metrics.unreadable` | Three polls in a row, at least 55 minutes after the first miss, found the game up but could not read its counters (about 90 minutes at the half-hourly poll; quick "Update status" taps do not add up to it). Clears on the next good reading | One cold start or dropped connection is not news; a wrong token fails the same way every time |
+| `metrics.unreadable` | Three polls in a row, at least 45 minutes after the first miss, found the game up but could not read its counters (about 90 minutes at the half-hourly poll; quick "Update status" taps do not add up to it). Clears on the next good reading | One cold start or dropped connection is not news; a wrong token fails the same way every time |
 | `rate:<counter>` | A counter grows past its hourly ceiling | Only the counters you name below are watched |
 
 `metrics.unreadable` matters more than it looks: while it is raised no other alarm here can fire,

@@ -213,6 +213,35 @@ final class AnnounceMetricAlarmsTest extends TestCase
         self::assertStringContainsString('The last 4 readings of its counters failed', $channel->sent[0]->body());
     }
 
+    public function testThreeLateScheduledMissesStillRaiseTheAlarm(): void
+    {
+        $channel = new FakeAlertChannel();
+        $announce = $this->announcer(new InMemoryMetricStore(), new InMemoryAlarmStateStore(), $channel);
+        $project = $this->project();
+
+        // The cron started 12, 3 and 1 minutes late: 49 minutes from the first miss to the third.
+        $announce->forUnreadable($project, 'timeout', $this->now());
+        $announce->forUnreadable($project, 'timeout', $this->now()->modify('+21 minutes'));
+        $announce->forUnreadable($project, 'timeout', $this->now()->modify('+49 minutes'));
+
+        self::assertCount(1, $channel->sent);
+        self::assertStringContainsString('The last 3 readings', $channel->sent[0]->body());
+    }
+
+    public function testABurstOfTapsAndTheNextPollAreNotAnAlarm(): void
+    {
+        $channel = new FakeAlertChannel();
+        $announce = $this->announcer(new InMemoryMetricStore(), new InMemoryAlarmStateStore(), $channel);
+        $project = $this->project();
+
+        $announce->forUnreadable($project, 'timeout', $this->now());
+        $announce->forUnreadable($project, 'timeout', $this->now()->modify('+1 minute'));
+        $announce->forUnreadable($project, 'timeout', $this->now()->modify('+2 minutes'));
+        $announce->forUnreadable($project, 'timeout', $this->now()->modify('+30 minutes'));
+
+        self::assertSame([], $channel->sent);
+    }
+
     public function testAnUnreadableAlarmThatCouldNotBeMailedIsTriedAgainWithTheTrueCount(): void
     {
         $state = new InMemoryAlarmStateStore();
